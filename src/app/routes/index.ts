@@ -9,6 +9,7 @@ import { BookingRoutes } from "../modules/booking/booking.route";
 import { ReportsRoutes } from "../modules/reports/reports.route";
 import { ApplicationsRoutes } from "../modules/applications/applications.route";
 import { RuleRoutes } from "../modules/rule/rule.route";
+import { FaqRoutes } from "../modules/faq/faq.route";
 
 const router = express.Router();
 
@@ -23,6 +24,7 @@ const apiRoutes = [
   { path: "/reports", route: ReportsRoutes },
   { path: "/applications", route: ApplicationsRoutes },
   { path: "/rule", route: RuleRoutes },
+  { path: "/faq", route: FaqRoutes },
 ];
 
 apiRoutes.forEach((route) => router.use(route.path, route.route));
