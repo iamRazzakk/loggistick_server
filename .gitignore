@@ -1,0 +1,9 @@
+node_modules
+uploads
+/winston
+.env
+dist
+SECURITY.md
+*.txt
+*questions.md
+*.log

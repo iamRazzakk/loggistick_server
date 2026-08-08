@@ -1,0 +1,29 @@
+import express from "express";
+import { UserRoutes } from "../modules/user/user.routes";
+import { AuthRoutes } from "../modules/auth/auth.routes";
+import { VehicleRoutes } from "../modules/vehicle/vehicle.route";
+import { FundingSourcesRoutes } from "../modules/funding_sources/funding_sources.route";
+import { FacilitiesAndProgramsRoutes } from "../modules/facilities_and_programs/facilities_and_programs.route";
+import { CompanySupportRoutes } from "../modules/company_support/company_support.route";
+import { BookingRoutes } from "../modules/booking/booking.route";
+import { ReportsRoutes } from "../modules/reports/reports.route";
+import { ApplicationsRoutes } from "../modules/applications/applications.route";
+import { RuleRoutes } from "../modules/rule/rule.route";
+
+const router = express.Router();
+
+const apiRoutes = [
+  { path: "/user", route: UserRoutes },
+  { path: "/auth", route: AuthRoutes },
+  { path: "/vehicle", route: VehicleRoutes },
+  { path: "/funding-sources", route: FundingSourcesRoutes },
+  { path: "/facilities-and-programs", route: FacilitiesAndProgramsRoutes },
+  { path: "/company-support", route: CompanySupportRoutes },
+  { path: "/booking", route: BookingRoutes },
+  { path: "/reports", route: ReportsRoutes },
+  { path: "/applications", route: ApplicationsRoutes },
+  { path: "/rule", route: RuleRoutes },
+];
+
+apiRoutes.forEach((route) => router.use(route.path, route.route));
+export default router;

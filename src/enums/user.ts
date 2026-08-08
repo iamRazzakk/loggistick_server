@@ -1,0 +1,6 @@
+export enum USER_ROLES {
+  SUPER_ADMIN = "SUPER_ADMIN",
+  DISPATCHER = "DISPATCHER",
+  DRIVER = "DRIVER",
+  USER = "USER",
+}

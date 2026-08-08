@@ -1,0 +1,39 @@
+services:
+  app:
+    build: .
+    # container_name: loggistick-server
+    # ports:
+      # - "5002:5002"
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      # - DATABASE_URL=mongodb://mongodb:27017/loggistickDB
+      - BULLMQIP=redis
+      - BULLMQPORT=6379
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  redis:
+    image: redis:latest
+    container_name: loggistick-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    restart: unless-stopped
+
+  # mongodb:
+  #   image: mongo:6
+  #   container_name: loggistick-mongodb
+  #   ports:
+  #     - "27017:27017"
+  #   volumes:
+  #     - mongodata:/data/db
+  #   restart: unless-stopped
+
+volumes:
+  redisdata:
+  # mongodata:
