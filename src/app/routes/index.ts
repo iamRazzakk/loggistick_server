@@ -10,6 +10,7 @@ import { ReportsRoutes } from "../modules/reports/reports.route";
 import { ApplicationsRoutes } from "../modules/applications/applications.route";
 import { RuleRoutes } from "../modules/rule/rule.route";
 import { FaqRoutes } from "../modules/faq/faq.route";
+import { PushNotificationRoutes } from "../modules/push_notification/push_notification.route";
 
 const router = express.Router();
 
@@ -25,6 +26,7 @@ const apiRoutes = [
   { path: "/applications", route: ApplicationsRoutes },
   { path: "/rule", route: RuleRoutes },
   { path: "/faq", route: FaqRoutes },
+  { path: "/push-notification", route: PushNotificationRoutes },
 ];
 
 apiRoutes.forEach((route) => router.use(route.path, route.route));

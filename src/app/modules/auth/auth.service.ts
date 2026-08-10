@@ -20,7 +20,7 @@ import { redisService } from "../../../redis/redis.service";
 
 //login
 const loginUserFromDB = async (payload: ILoginData) => {
-  const { email, password } = payload;
+  const { email, password, deviceToken } = payload;
 
   const user = await User.findOne({ email }).select("+password");
   if (!user) {
@@ -38,6 +38,10 @@ const loginUserFromDB = async (payload: ILoginData) => {
   const isPasswordMatched = await User.isMatchPassword(password, user.password);
   if (!isPasswordMatched) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Password is incorrect!");
+  }
+
+  if (deviceToken) {
+    await User.findByIdAndUpdate(user._id, { deviceToken });
   }
 
   // Access Token

@@ -120,6 +120,11 @@ const userSchema = new Schema<IUser, UserModal>(
       type: Boolean,
       default: false,
     },
+    deviceToken: {
+      type: String,
+      required: false,
+      default: null,
+    },
   },
   {
     timestamps: true,

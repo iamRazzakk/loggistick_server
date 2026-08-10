@@ -30,6 +30,7 @@ export type IUser = {
   verified: boolean;
   isBanned: boolean;
   trip: number;
+  deviceToken?: string;
 };
 
 export type UserModal = {
