@@ -45,6 +45,7 @@ const updateMobilityFromDB = async (
   id: string,
   payload: Partial<IMobility>,
 ) => {
+  console.log(payload);
   const result = await Mobility.findByIdAndUpdate(id, payload, { new: true });
   if (!result) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to update mobility");

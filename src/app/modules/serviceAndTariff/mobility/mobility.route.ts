@@ -23,7 +23,6 @@ router
           req.files as Record<string, Express.Multer.File[]>,
           "image",
         );
-        console.log("image data", image);
         req.body.price = Number(req.body.price);
         if (image) {
           req.body.icon = image;
@@ -61,6 +60,24 @@ router
   .patch(
     auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
     validateRequest(MobilityValidations.updateMobilityZodSchema),
+    getUploadFields(),
+    async (req: Request, _res: Response, next: NextFunction) => {
+      try {
+        const data = req.body;
+        const image = getSingleFilePath(
+          req.files as Record<string, Express.Multer.File[]>,
+          "image",
+        );
+        req.body.price = Number(req.body.price);
+        if (image) {
+          req.body.icon = image;
+        }
+        req.body = data;
+        next();
+      } catch (error) {
+        next(error);
+      }
+    },
     MobilityController.updateMobility,
   )
   .delete(
