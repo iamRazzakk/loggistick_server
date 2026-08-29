@@ -27,7 +27,25 @@ const UPLOAD_CONFIG: Record<string, UploadConfigItem> = {
   },
   doc: {
     folder: "docs",
-    allowedMimeTypes: ["application/pdf", "application/msword"],
+    allowedMimeTypes: [
+      "application/pdf",
+      "application/msword",
+      "application/json",
+      "application/geo+json",
+      "text/plain",
+      "application/octet-stream",
+    ],
+    maxCount: 5,
+    maxSize: 50 * 1024 * 1024, // 50MB
+  },
+  file: {
+    folder: "files",
+    allowedMimeTypes: [
+      "application/json",
+      "application/geo+json",
+      "text/plain",
+      "application/octet-stream",
+    ],
     maxCount: 5,
     maxSize: 50 * 1024 * 1024, // 50MB
   },
@@ -97,7 +115,10 @@ const fileFilter = (
     );
   }
 
-  if (!config.allowedMimeTypes.includes(file.mimetype)) {
+  const ext = path.extname(file.originalname).toLowerCase();
+  const isGeoJsonFile = [".json", ".geojson", ".kml", ".zip"].includes(ext);
+
+  if (!config.allowedMimeTypes.includes(file.mimetype) && !isGeoJsonFile) {
     return cb(
       new ApiError(
         StatusCodes.BAD_REQUEST,

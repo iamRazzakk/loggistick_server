@@ -1,8 +1,6 @@
 import { StatusCodes } from "http-status-codes";
 import ApiError from "../../../errors/ApiErrors";
-import {
-  IPushNotification,
-} from "./push_notification.interface";
+import { IPushNotification } from "./push_notification.interface";
 import { PushNotification } from "./push_notification.model";
 import QueryBuilder from "../../builder/queryBuilder";
 import { User } from "../user/user.model";
@@ -27,13 +25,13 @@ const createPushNotificationIntoDB = async (payload: IPushNotification) => {
     .map((user) => user.deviceToken)
     .filter((token): token is string => Boolean(token));
 
-  if (tokens.length) {
-    await FirebaseHelperFMC.sendNotificationToUsers({
-      tokens,
-      title: payload.title,
-      body: payload.message,
-    });
-  }
+  // if (tokens.length) {
+  //   await FirebaseHelperFMC.sendNotificationToUsers({
+  //     tokens,
+  //     title: payload.title,
+  //     body: payload.message,
+  //   });
+  // }
 
   return data;
 };

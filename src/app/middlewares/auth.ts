@@ -31,7 +31,7 @@ const auth =
       } catch {
         throw new ApiError(
           StatusCodes.UNAUTHORIZED,
-          "Invalid or expired token"
+          "Invalid or expired token",
         );
       }
 
@@ -53,7 +53,7 @@ const auth =
       if (dbUser.role !== verifyUser.role) {
         throw new ApiError(
           StatusCodes.UNAUTHORIZED,
-          "Permission changed. Please login again"
+          "Permission changed. Please login again",
         );
       }
 
@@ -61,13 +61,12 @@ const auth =
         id: dbUser._id.toString(),
         email: verifyUser.email ?? dbUser.email,
         role: dbUser.role,
-        tokenVersion: dbUser.tokenVersion,
       };
 
       if (roles.length && !roles.includes(verifyUser.role)) {
         throw new ApiError(
           StatusCodes.FORBIDDEN,
-          "You don't have permission to access this api"
+          "You don't have permission to access this api",
         );
       }
 
