@@ -63,6 +63,10 @@ const userSchema = new Schema<IUser, UserModal>(
       type: driverDataSchema,
       required: false,
     },
+    authorizationID: {
+      type: String,
+      required: false,
+    },
     accessScope: {
       type: [String],
       required: false,
@@ -70,6 +74,11 @@ const userSchema = new Schema<IUser, UserModal>(
     isBanned: {
       type: Boolean,
       default: false,
+    },
+    county: {
+      type: Schema.Types.ObjectId,
+      ref: "County",
+      required: false,
     },
     email: {
       type: String,

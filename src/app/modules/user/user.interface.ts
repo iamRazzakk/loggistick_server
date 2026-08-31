@@ -21,7 +21,8 @@ export type IUser = {
   // driver related fields
   driverData?: IDriverData;
   role: USER_ROLES;
-
+  county?: Types.ObjectId;
+  authorizationID?: string;
   accessScope?: string[];
 
   password: string;
@@ -39,3 +40,5 @@ export type UserModal = {
   isAccountCreated(id: string): any;
   isMatchPassword(password: string, hashPassword: string): boolean;
 } & Model<IUser>;
+
+// need to add county
