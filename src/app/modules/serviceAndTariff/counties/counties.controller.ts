@@ -27,6 +27,18 @@ const getAllCounties = catchAsync(
     });
   },
 );
+// admin
+const getAllCountiesAdmin = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const result = await CountiesService.getAllCountiesForAdmin();
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: "Counties fetched successfully",
+      data: result,
+    });
+  },
+);
 
 const getSingleCounty = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -102,5 +114,5 @@ export const CountiesController = {
   deleteCounties,
   checkLocation,
   seedCounties,
+  getAllCountiesAdmin,
 };
-

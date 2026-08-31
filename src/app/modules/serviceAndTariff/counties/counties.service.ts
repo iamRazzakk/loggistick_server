@@ -21,12 +21,31 @@ const getAllCountiesFromDB = async () => {
     console.log("==========>>>From cache");
     return JSON.parse(cachedCounties);
   }
-  const result = await County.find().lean();
+  const result = await County.find().select("name state").lean();
   if (!result) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to get counties");
   }
   await redisService.post({
     key: "counties",
+    value: JSON.stringify(result),
+    expiration: 24 * 60 * 60, // 24 hours
+  });
+  console.log("==========>>>From DB");
+  return result;
+};
+// all county for admin
+const getAllCountiesForAdmin = async () => {
+  const cachedCounties = await redisService.get(`counties-for-admin`);
+  if (cachedCounties) {
+    console.log("==========>>>From cache");
+    return JSON.parse(cachedCounties);
+  }
+  const result = await County.find().lean();
+  if (!result) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to get counties");
+  }
+  await redisService.post({
+    key: "counties-for-admin",
     value: JSON.stringify(result),
     expiration: 24 * 60 * 60, // 24 hours
   });
@@ -177,5 +196,5 @@ export const CountiesService = {
   deleteCountiesFromDB,
   findCountyByLocationFromDB,
   seedCountiesFromGeoFenceIntoDB,
+  getAllCountiesForAdmin,
 };
-

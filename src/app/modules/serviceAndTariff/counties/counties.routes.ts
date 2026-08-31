@@ -29,6 +29,13 @@ router
   );
 
 router
+  .route("/admin")
+  .get(
+    auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+    CountiesController.getAllCountiesAdmin,
+  );
+
+router
   .route("/:id")
   .get(
     auth(
