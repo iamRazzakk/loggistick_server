@@ -13,6 +13,7 @@ import { FaqRoutes } from "../modules/faq/faq.route";
 import { PushNotificationRoutes } from "../modules/push_notification/push_notification.route";
 import { CountiesRoutes } from "../modules/serviceAndTariff/counties/counties.routes";
 import { MobilityRoutes } from "../modules/serviceAndTariff/mobility/mobility.route";
+import { PayersRoutes } from "../modules/serviceAndTariff/payers/payers.route";
 
 const router = express.Router();
 
@@ -31,6 +32,7 @@ const apiRoutes = [
   { path: "/push-notification", route: PushNotificationRoutes },
   { path: "/counties", route: CountiesRoutes },
   { path: "/mobility", route: MobilityRoutes },
+  { path: "/payers", route: PayersRoutes },
 ];
 
 apiRoutes.forEach((route) => router.use(route.path, route.route));
