@@ -33,6 +33,7 @@ const getAllBookings = catchAsync(async (req: Request, res: Response) => {
     req.user,
     req.query,
   );
+  console.log("=====================>Bookings");
   sendResponse(res, {
     statusCode: StatusCodes.OK,
     success: true,
@@ -89,15 +90,19 @@ const getScheduledBookings = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-const getSingleRiderBookingHistory = catchAsync(async (req: Request, res: Response) => {
-  const bookings = await BookingServices.getSingleRiderBookingHistoryFromDB(req.params.id);
-  sendResponse(res, {
-    statusCode: StatusCodes.OK,
-    success: true,
-    message: "Single rider booking history fetched successfully",
-    data: bookings,
-  });
-});
+const getSingleRiderBookingHistory = catchAsync(
+  async (req: Request, res: Response) => {
+    const bookings = await BookingServices.getSingleRiderBookingHistoryFromDB(
+      req.params.id,
+    );
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: "Single rider booking history fetched successfully",
+      data: bookings,
+    });
+  },
+);
 
 export const BookingController = {
   createBooking,

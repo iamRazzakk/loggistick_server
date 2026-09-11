@@ -29,32 +29,27 @@ export type IBooking = {
   dropOffLocation: number;
   stopAddress?: number;
   // mobility requirements
-  mobilityRequirements:
-    | "ambulatory"
-    | "wheelchair"
-    | "walker"
-    | "rollator"
-    | "cane";
+  mobilityRequirements: Types.ObjectId;
   // note
   tripNote?: string;
   internalPrivateNote?: string;
+
   // trip configuration
   tripType: "one-way" | "round-trip";
   tripReason: AppointmentType;
   // passenger seats
   passengerSeats: number;
 
-  fundingSource: Types.ObjectId;
-  countryJurisdiction: County;
-  programContext: Types.ObjectId;
-  tripJurisdiction: boolean;
+  // County source
+  payerSource: Types.ObjectId;
+  programContext: string;
+
   // service
   serviceDate: string;
   appointmentTime: string;
   pickupTime: string;
   // if round-trip
   returnTime?: string;
-
   recurringBooking: boolean;
   selectedDate?:
     | "saturday"
@@ -67,13 +62,12 @@ export type IBooking = {
     | string[];
 
   endDate?: string;
+  // driver
   driverId: Types.ObjectId;
-
-  vehicleId: Types.ObjectId;
   // booking status
   bookingStatus: "pending" | "confirmed" | "cancelled" | "completed";
-  createdAt: Date;
-  updatedAt: Date;
+  recurringBatchId?: string;
+  price?: number;
 };
 
 export type BookingModel = Model<IBooking>;

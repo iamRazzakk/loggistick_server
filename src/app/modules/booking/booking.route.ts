@@ -2,6 +2,8 @@ import express from "express";
 import { BookingController } from "./booking.controller";
 import auth from "../../middlewares/auth";
 import { USER_ROLES } from "../../../enums/user";
+import validateRequest from "../../middlewares/validateRequest";
+import { BookingValidations } from "./booking.validation";
 
 const router = express.Router();
 
@@ -14,6 +16,7 @@ router
       USER_ROLES.SUPER_ADMIN,
       USER_ROLES.USER,
     ),
+    validateRequest(BookingValidations.createBookingZodSchema),
     BookingController.createBooking,
   )
   .get(
@@ -73,6 +76,7 @@ router
       USER_ROLES.SUPER_ADMIN,
       USER_ROLES.USER,
     ),
+    validateRequest(BookingValidations.updateBookingZodSchema),
     BookingController.updateBooking,
   );
 

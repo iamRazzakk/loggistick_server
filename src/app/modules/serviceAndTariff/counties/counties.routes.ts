@@ -19,12 +19,12 @@ router
     CountiesController.createCounties,
   )
   .get(
-    // auth(
-    //   USER_ROLES.SUPER_ADMIN,
-    //   USER_ROLES.USER,
-    //   USER_ROLES.DISPATCHER,
-    //   USER_ROLES.DRIVER,
-    // ),
+    auth(
+      USER_ROLES.SUPER_ADMIN,
+      USER_ROLES.USER,
+      USER_ROLES.DISPATCHER,
+      USER_ROLES.DRIVER,
+    ),
     CountiesController.getAllCounties,
   );
 
@@ -34,6 +34,16 @@ router
     auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
     CountiesController.getAllCountiesAdmin,
   );
+
+router.route("/check-location").get(
+  auth(
+    USER_ROLES.SUPER_ADMIN,
+    USER_ROLES.USER,
+    USER_ROLES.DISPATCHER,
+    USER_ROLES.DRIVER,
+  ),
+  CountiesController.checkLocation,
+);
 
 router
   .route("/:id")
@@ -47,22 +57,14 @@ router
     CountiesController.getSingleCounty,
   )
   .patch(
-    auth(
-      USER_ROLES.SUPER_ADMIN,
-      USER_ROLES.USER,
-      USER_ROLES.DISPATCHER,
-      USER_ROLES.DRIVER,
-    ),
+    auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+    getUploadFields(),
+    parseCountyUpload,
     validateRequest(CountiesValidation.updateCountyZodSchema),
     CountiesController.updateCounties,
   )
   .delete(
-    auth(
-      USER_ROLES.SUPER_ADMIN,
-      USER_ROLES.USER,
-      USER_ROLES.DISPATCHER,
-      USER_ROLES.DRIVER,
-    ),
+    auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
     CountiesController.deleteCounties,
   );
 

@@ -7,6 +7,29 @@ import QueryBuilder from "../../builder/queryBuilder";
 import { generateRecurringDates } from "../../../util/recurringBooking";
 import { Types } from "mongoose";
 import { format } from "date-fns";
+import { randomUUID } from "crypto";
+import {
+  bookingQueue,
+  bookingQueueEvents,
+  CREATE_RECURRING_BOOKINGS_JOB,
+} from "../../../queue/booking.queue";
+
+const JOB_WAIT_MS = 120_000;
+
+const toBookingErrorMessage = (error: unknown) => {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "";
+
+  if (message.toLowerCase().includes("timed out")) {
+    return "Recurring booking creation is taking too long. Please try a shorter date range.";
+  }
+
+  return message || "Failed to create recurring bookings. Please try again.";
+};
 
 const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
   if (payload.userId) {
@@ -14,12 +37,13 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
   } else {
     payload.userId = new Types.ObjectId(user.id);
   }
-  // Normal booking
+
+  payload.bookingStatus = "pending";
+
   if (!payload.recurringBooking) {
     return await Booking.create(payload);
   }
 
-  // Validation
   if (!payload.endDate) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
@@ -33,21 +57,46 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
       "Please select at least one recurring day.",
     );
   }
+
   const selectedDays = Array.isArray(payload.selectedDate)
     ? payload.selectedDate
-    : [payload.selectedDate!];
+    : [payload.selectedDate];
   const recurringDates = generateRecurringDates(
     payload.serviceDate,
     payload.endDate,
     selectedDays,
   );
 
-  const bookings = recurringDates.map((date) => ({
-    ...payload,
-    serviceDate: date,
-  }));
+  if (!recurringDates.length) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "No booking dates found for the selected days and date range.",
+    );
+  }
 
-  return await Booking.insertMany(bookings);
+  const recurringBatchId = randomUUID();
+
+  try {
+    await bookingQueueEvents.waitUntilReady();
+    const job = await bookingQueue.add(CREATE_RECURRING_BOOKINGS_JOB, {
+      dates: recurringDates,
+      payload: {
+        ...payload,
+        userId: payload.userId.toString(),
+        mobilityRequirements: payload.mobilityRequirements.toString(),
+        payerSource: payload.payerSource.toString(),
+        driverId: payload.driverId.toString(),
+        selectedDate: selectedDays,
+        bookingStatus: "pending",
+        recurringBatchId,
+      },
+    });
+
+    return await job.waitUntilFinished(bookingQueueEvents, JOB_WAIT_MS);
+  } catch (error) {
+    await Booking.deleteMany({ recurringBatchId });
+    throw new ApiError(StatusCodes.BAD_REQUEST, toBookingErrorMessage(error));
+  }
 };
 
 // get all my bookings
@@ -62,10 +111,9 @@ const getAllMyBookingsFromDB = async (
     .fields()
     .filter()
     .sort()
-    .populate(["userId", "driverId", "vehicleId"], {
+    .populate(["userId", "driverId"], {
       userId: "firstName lastName middleName profile",
       driverId: "firstName lastName middleName profile",
-      vehicleId: "model",
     })
     .paginate();
   const [data, meta] = await Promise.all([
@@ -90,14 +138,12 @@ const getAllBookingsFromDB = async (
       "driverId.firstName",
       "driverId.lastName",
       "driverId.middleName",
-      "vehicleId.model",
       "bookingStatus",
     ])
     .paginate()
-    .populate(["userId", "driverId", "vehicleId"], {
+    .populate(["userId", "driverId"], {
       userId: "firstName lastName middleName profile",
       driverId: "firstName lastName middleName profile",
-      vehicleId: "model",
     });
   const [data, meta] = await Promise.all([
     qb.modelQuery.exec(),

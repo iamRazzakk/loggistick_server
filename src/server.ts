@@ -6,7 +6,8 @@ import colors from "colors";
 import { socketHelper } from "./helpers/socketHelper";
 import { Server } from "socket.io";
 import seedSuperAdmin from "./DB";
-import "./worker/email.worker"; // Start BullMQ worker
+import "./worker/email.worker"; // Email worker
+import "./worker/booking.worker"; // Booking worker
 // redis client
 import "./config/redis.config";
 import { RedisClient } from "./config/redis.config";

@@ -8,11 +8,14 @@ import {
 
 const bookingSchema = new Schema<IBooking, BookingModel>(
   {
+    // user data
     userId: {
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
+
+    // pickup and drop off and county coverage
     pickupLocation: {
       type: Number,
       required: true,
@@ -25,11 +28,15 @@ const bookingSchema = new Schema<IBooking, BookingModel>(
       type: Number,
       required: false,
     },
+
+    // mobility requirements
     mobilityRequirements: {
-      type: String,
-      enum: ["ambulatory", "wheelchair", "walker", "rollator", "cane"],
+      type: Schema.Types.ObjectId,
+      ref: "Mobility",
       required: true,
     },
+
+    // note
     tripNote: {
       type: String,
       required: false,
@@ -38,6 +45,7 @@ const bookingSchema = new Schema<IBooking, BookingModel>(
       type: String,
       required: false,
     },
+
     tripType: {
       type: String,
       enum: ["one-way", "round-trip"],
@@ -52,23 +60,13 @@ const bookingSchema = new Schema<IBooking, BookingModel>(
       type: Number,
       required: true,
     },
-    fundingSource: {
+    payerSource: {
       type: Schema.Types.ObjectId,
-      ref: "FundingSources",
-      required: true,
-    },
-    countryJurisdiction: {
-      type: String,
-      enum: Object.values(County),
+      ref: "Payers",
       required: true,
     },
     programContext: {
-      type: Schema.Types.ObjectId,
-      ref: "FacilitiesAndPrograms",
-      required: true,
-    },
-    tripJurisdiction: {
-      type: Boolean,
+      type: String,
       required: true,
     },
     serviceDate: {
@@ -114,16 +112,22 @@ const bookingSchema = new Schema<IBooking, BookingModel>(
       ref: "User",
       required: true,
     },
-    vehicleId: {
-      type: Schema.Types.ObjectId,
-      ref: "Vehicle",
-      required: true,
-    },
     bookingStatus: {
       type: String,
       enum: ["pending", "confirmed", "cancelled", "completed"],
       required: true,
       default: "pending",
+    },
+    recurringBatchId: {
+      type: String,
+      required: false,
+      index: true,
+    },
+
+    price: {
+      type: Number,
+      required: false,
+      default: 0,
     },
   },
   {
