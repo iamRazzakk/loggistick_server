@@ -29,6 +29,9 @@ export default {
     host: process.env.EMAIL_HOST,
     pass: process.env.EMAIL_PASS,
   },
+  app: {
+    downloadUrl: process.env.APP_DOWNLOAD_URL || "https://loggistick.com/download",
+  },
   social: {
     google_client_id: process.env.GOOGLE_CLIENT_ID,
     facebook_client_id: process.env.FACEBOOK_CLIENT_ID,

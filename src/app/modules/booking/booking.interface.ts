@@ -65,7 +65,13 @@ export type IBooking = {
   // driver
   driverId: Types.ObjectId;
   // booking status
-  bookingStatus: "pending" | "confirmed" | "cancelled" | "completed";
+  bookingStatus:
+    | "pending"
+    | "assigned"
+    | "in-progress"
+    | "confirmed"
+    | "cancelled"
+    | "completed";
   recurringBatchId?: string;
   price?: number;
 };
