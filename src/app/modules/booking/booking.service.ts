@@ -140,8 +140,10 @@ const getAllBookingsFromDB = async (
       "driverId.middleName",
       "bookingStatus",
     ])
+    .filter()
+    .search(["payerSource"])
     .paginate()
-    .populate(["userId", "driverId"], {
+    .populate(["userId", "driverId", "mobilityRequirements", "payerSource"], {
       userId: "firstName lastName middleName profile",
       driverId: "firstName lastName middleName profile",
     });

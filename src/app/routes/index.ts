@@ -16,6 +16,9 @@ import { MobilityRoutes } from "../modules/serviceAndTariff/mobility/mobility.ro
 import { PayersRoutes } from "../modules/serviceAndTariff/payers/payers.route";
 import { UserManagementRoutes } from "../modules/user-management/user-management.route";
 import { DashboardRoutes } from "../modules/dashboard/dashboard.route";
+import { ScheduledRoutes } from "../modules/scheduled/scheduled.route";
+import { VehicleAssignRoutes } from "../modules/vehicleassign/vehicleassign.route";
+import { DriverratingRoutes } from "../modules/driverrating/driverrating.route";
 
 const router = express.Router();
 
@@ -37,6 +40,9 @@ const apiRoutes = [
   { path: "/payers", route: PayersRoutes },
   { path: "/user-management", route: UserManagementRoutes },
   { path: "/dashboard", route: DashboardRoutes },
+  { path: "/bookings", route: ScheduledRoutes },
+  { path: "/vehicle-assign", route: VehicleAssignRoutes },
+  { path: "/ratings", route: DriverratingRoutes },
 ];
 
 apiRoutes.forEach((route) => router.use(route.path, route.route));
