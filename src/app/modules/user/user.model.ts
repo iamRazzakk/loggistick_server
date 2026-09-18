@@ -97,6 +97,10 @@ const userSchema = new Schema<IUser, UserModal>(
       required: [true, "Contact is required!"],
       match: [/^\+?[1-9]\d{1,14}$/, "Please provide a valid contact number!"],
     },
+    isAdminVerifiedDriver: {
+      type: Boolean,
+      default: false,
+    },
     password: {
       type: String,
       required: [true, "Password is required!"],
@@ -108,6 +112,16 @@ const userSchema = new Schema<IUser, UserModal>(
       enum: ["pending", "approved", "rejected"],
       default: "pending",
     },
+    isOnDuty: {
+      type: Boolean,
+      default: false,
+    },
+    lastKnownLocation: {
+      lat: { type: Number },
+      lng: { type: Number },
+      updatedAt: { type: Date },
+    },
+
     trip: {
       type: Number,
       default: 0,

@@ -1,0 +1,85 @@
+import { StatusCodes } from "http-status-codes";
+import catchAsync from "../../../../shared/catchAsync";
+import sendResponse from "../../../../shared/sendResponse";
+import { AppApiBookingService } from "./booking.service";
+import { Request, Response } from "express";
+
+const getMyBookingsOnGoingData = catchAsync(
+  async (req: Request, res: Response) => {
+    const bookings = await AppApiBookingService.getMyBookingsOnGoingDataFromDB(
+      req.user,
+    );
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: "Bookings fetched successfully",
+      data: bookings,
+    });
+  },
+);
+
+const getMyBookingDetailsData = catchAsync(
+  async (req: Request, res: Response) => {
+    const booking = await AppApiBookingService.getMyBookingDetailsDataFromDB(
+      req.user,
+      req.params.id,
+    );
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: "Booking details fetched successfully",
+      data: booking,
+    });
+  },
+);
+
+
+const getAllUpcomingBookings = catchAsync(
+  async (req: Request, res: Response) => {
+    const bookings = await AppApiBookingService.getAllUpcomingBookingsFromDB(
+      req.user,
+    );
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: "Bookings fetched successfully",
+      data: bookings,
+    });
+  },
+);
+
+const getRecentActivity = catchAsync(
+  async (req: Request, res: Response) => {
+    const bookings = await AppApiBookingService.getRecentActivityFromDB(
+      req.user,
+    );
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: "Bookings fetched successfully",
+      data: bookings,
+    });
+  },
+);
+
+const getDriverOverviewData = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await AppApiBookingService.getDriverOverviewDataFromDB(
+      req.user,
+    );
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: "Driver overview data fetched successfully",
+      data: data,
+    });
+  },
+);
+
+export const AppApiBookingController = {
+  getMyBookingsOnGoingData,
+  getMyBookingDetailsData,
+  getAllUpcomingBookings,
+  getRecentActivity,
+  getDriverOverviewData,
+};

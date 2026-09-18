@@ -128,7 +128,16 @@ const getAllBookingsFromDB = async (
   user: JwtPayload,
   query: Record<string, any>,
 ) => {
-  const qb = new QueryBuilder(Booking.find({}), query)
+  const userId = user.id;
+  const qb = new QueryBuilder(
+    Booking.find({
+      $or: [
+        { userId: new Types.ObjectId(userId) },
+        { driverId: new Types.ObjectId(userId) },
+      ],
+    }),
+    query,
+  )
     .filter()
     .sort()
     .search([
@@ -145,7 +154,7 @@ const getAllBookingsFromDB = async (
     .paginate()
     .populate(["userId", "driverId", "mobilityRequirements", "payerSource"], {
       userId: "firstName lastName middleName profile",
-      driverId: "firstName lastName middleName profile",
+      driverId: "firstName lastName middleName profile contact",
     });
   const [data, meta] = await Promise.all([
     qb.modelQuery.exec(),

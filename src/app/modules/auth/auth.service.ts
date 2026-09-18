@@ -17,6 +17,7 @@ import { ResetToken } from "../resetToken/resetToken.model";
 import { User } from "../user/user.model";
 import { jwtHelpers } from "../../../helpers/jwtHelper";
 import { redisService } from "../../../redis/redis.service";
+import { USER_ROLES } from "../../../enums/user";
 
 //login
 const loginUserFromDB = async (payload: ILoginData) => {
@@ -32,6 +33,14 @@ const loginUserFromDB = async (payload: ILoginData) => {
       StatusCodes.BAD_REQUEST,
       "Please verify your account first!",
     );
+  }
+  if (user.role === USER_ROLES.DRIVER) {
+    if (!user.isAdminVerifiedDriver) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "Please wait for admin verification!",
+      );
+    }
   }
 
   // Password match check
@@ -53,6 +62,7 @@ const loginUserFromDB = async (payload: ILoginData) => {
   const refreshToken = jwtHelpers.createRefreshToken(user._id.toString());
 
   return {
+    role: user.role,
     accessToken,
     refreshToken,
   };

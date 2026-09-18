@@ -12,7 +12,6 @@ router
   .post(
     auth(
       USER_ROLES.DISPATCHER,
-      USER_ROLES.DRIVER,
       USER_ROLES.SUPER_ADMIN,
       USER_ROLES.USER,
     ),

@@ -30,6 +30,13 @@ export type IUser = {
   profile: string;
   verified: boolean;
   isBanned: boolean;
+  isOnDuty?: boolean;
+  isAdminVerifiedDriver?: boolean;
+  lastKnownLocation?: {
+    lat: number;
+    lng: number;
+    updatedAt: Date;
+  };
   trip: number;
   deviceToken?: string;
 };
