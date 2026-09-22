@@ -22,6 +22,19 @@ const updateDriverApplicationsStatus = catchAsync(
   },
 );
 
+const getAllDriver = catchAsync(async (req: Request, res: Response) => {
+  const { query } = req;
+  const { data, meta } = await ApplicationsServices.getAllDriverFromDB(query);
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "All drivers fetched successfully",
+    pagination: meta,
+    data,
+  });
+});
+
 export const ApplicationsController = {
   updateDriverApplicationsStatus,
+  getAllDriver,
 };

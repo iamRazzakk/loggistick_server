@@ -260,7 +260,7 @@ const getSingleRiderBookingHistoryFromDB = async (id: string) => {
     .populate([
       { path: "userId", select: "firstName lastName middleName profile" },
       { path: "driverId", select: "firstName lastName middleName profile" },
-      { path: "vehicleId", select: "model" },
+      // { path: "vehicleId", select: "model" },
     ])
     .sort("-serviceDate")
     .lean();

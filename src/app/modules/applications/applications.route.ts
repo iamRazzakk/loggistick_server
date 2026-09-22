@@ -11,4 +11,10 @@ router.patch(
   ApplicationsController.updateDriverApplicationsStatus,
 );
 
+router.get(
+  "/drivers",
+  auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+  ApplicationsController.getAllDriver,
+);
+
 export const ApplicationsRoutes = router;
