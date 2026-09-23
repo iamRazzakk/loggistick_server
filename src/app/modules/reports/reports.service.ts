@@ -4,6 +4,7 @@ import ApiError from "../../../errors/ApiErrors";
 import QueryBuilder from "../../builder/queryBuilder";
 import { IReports } from "./reports.interface";
 import { Reports } from "./reports.model";
+import { Booking } from "../booking/booking.model";
 const createReportIntoDB = async (user: JwtPayload, payload: IReports) => {
   payload.reportedBy = user.id;
   const report = await Reports.create(payload);
@@ -16,7 +17,17 @@ const createReportIntoDB = async (user: JwtPayload, payload: IReports) => {
   return report;
 };
 const getAllReportsFromDB = async (query: Record<string, any>) => {
-  const qb = new QueryBuilder(Reports.find({}).populate("tripId"), query)
+  const { tripType, ...restQuery } = query;
+  const filter: Record<string, unknown> = {};
+  if (tripType) {
+    const tripIds = await Booking.find({ tripType }).distinct("_id");
+    filter.tripId = { $in: tripIds };
+  }
+  const qb = new QueryBuilder(
+    Reports.find(filter).populate("tripId"),
+    restQuery,
+  )
+    .search(["reportStatus"])
     .fields()
     .filter()
     .sort()

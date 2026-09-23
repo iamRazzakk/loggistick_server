@@ -105,7 +105,13 @@ const getAllMyBookingsFromDB = async (
   query: Record<string, any>,
 ) => {
   const qb = new QueryBuilder(
-    Booking.find({ userId: new Types.ObjectId(user.id) }),
+    // need to check user or driver id
+    Booking.find({
+      $or: [
+        { userId: new Types.ObjectId(user.id) },
+        { driverId: new Types.ObjectId(user.id) },
+      ],
+    }),
     query,
   )
     .fields()

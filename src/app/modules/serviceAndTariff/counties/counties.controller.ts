@@ -27,9 +27,7 @@ const getAllCounties = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getAllCountiesAdmin = catchAsync(async (req: Request, res: Response) => {
-  const payersId =
-    typeof req.query.payersId === "string" ? req.query.payersId : undefined;
-  const result = await CountiesService.getAllCountiesForAdmin(payersId);
+  const result = await CountiesService.getAllCountiesForAdmin(req.params.id);
   sendResponse(res, {
     statusCode: StatusCodes.OK,
     success: true,

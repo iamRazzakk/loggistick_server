@@ -5,14 +5,11 @@ import { Payers } from "../payers/payers.model";
 import { ICounty } from "./counties.interface";
 import { County } from "./counties.model";
 import { getPriceFieldsToUnset } from "./counties.sanitizeByPriceMethod.utils";
+import { types } from "node:util";
+import redisClient from "../../../../config/redis.config";
 
 const COUNTIES_CACHE_KEY = "counties";
 const COUNTIES_ADMIN_CACHE_KEY = "counties-for-admin";
-
-const invalidateCountiesCache = async () => {
-  await redisService.del(COUNTIES_CACHE_KEY);
-  await redisService.del(COUNTIES_ADMIN_CACHE_KEY);
-};
 
 const createCountiesIntoDB = async (payload: ICounty) => {
   const payer = await Payers.findById(payload.payersId).lean();
@@ -25,7 +22,12 @@ const createCountiesIntoDB = async (payload: ICounty) => {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to create county");
   }
 
-  await invalidateCountiesCache();
+  await redisService.post({
+    key: COUNTIES_CACHE_KEY,
+    value: JSON.stringify(result),
+    expiration: 24 * 60 * 60,
+  });
+
   return result;
 };
 
@@ -58,22 +60,17 @@ const getAllCountiesFromDB = async (payersId?: string) => {
   return result;
 };
 
-const getAllCountiesForAdmin = async (payersId?: string) => {
-  const cacheKey = payersId
-    ? `${COUNTIES_ADMIN_CACHE_KEY}:${payersId}`
-    : COUNTIES_ADMIN_CACHE_KEY;
+const getAllCountiesForAdmin = async (id: string) => {
+  const cacheKey = `${COUNTIES_ADMIN_CACHE_KEY}:${id}`;
 
   const cachedCounties = await redisService.get(cacheKey);
   if (cachedCounties) {
+    console.log("====>>From catch");
     return JSON.parse(cachedCounties);
   }
+  console.log("=====>>>>catch miss");
 
-  const filter: Record<string, unknown> = {};
-  if (payersId) {
-    filter.payersId = payersId;
-  }
-
-  const result = await County.find(filter)
+  const result = await County.find({ payersId: id })
     .populate("payersId", "name type isActive")
     .lean();
 
@@ -122,7 +119,7 @@ const updateCountiesFromDB = async (id: string, payload: Partial<ICounty>) => {
     throw new ApiError(StatusCodes.NOT_FOUND, "County not found");
   }
 
-  await invalidateCountiesCache();
+  await redisService.del(COUNTIES_CACHE_KEY);
   return result;
 };
 
@@ -137,7 +134,7 @@ const deleteCountiesFromDB = async (id: string) => {
     throw new ApiError(StatusCodes.NOT_FOUND, "County not found");
   }
 
-  await invalidateCountiesCache();
+  await redisService.del(COUNTIES_CACHE_KEY);
   return result;
 };
 
