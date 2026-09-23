@@ -16,12 +16,7 @@ const createReportIntoDB = async (user: JwtPayload, payload: IReports) => {
   return report;
 };
 const getAllReportsFromDB = async (query: Record<string, any>) => {
-  const qb = new QueryBuilder(
-    Reports.find({})
-      .populate("driverId", "firstName lastName email")
-      .populate("reportedBy", "firstName lastName email"),
-    query,
-  )
+  const qb = new QueryBuilder(Reports.find({}).populate("tripId"), query)
     .fields()
     .filter()
     .sort()
@@ -37,9 +32,7 @@ const getMyReportsFromDB = async (
   query: Record<string, any>,
 ) => {
   const qb = new QueryBuilder(
-    Reports.find({ reportedBy: user.id })
-      .populate("driverId", "firstName lastName email")
-      .populate("reportedBy", "firstName lastName email"),
+    Reports.find({ reportedBy: user.id }).populate("tripId"),
     query,
   )
     .fields()
@@ -53,9 +46,7 @@ const getMyReportsFromDB = async (
   return { data, meta };
 };
 const getReportByIdFromDB = async (id: string) => {
-  const report = await Reports.findById(id)
-    .populate("driverId", "firstName lastName email")
-    .populate("reportedBy", "firstName lastName email");
+  const report = await Reports.findById(id).populate("tripId");
   if (!report) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Report not found");
   }

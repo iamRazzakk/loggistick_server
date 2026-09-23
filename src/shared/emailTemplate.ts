@@ -1,10 +1,14 @@
-import { ICreateAccount, IResetPassword, IUserCredentials } from '../types/emailTemplate';
-import config from '../config';
+import {
+  ICreateAccount,
+  IResetPassword,
+  IUserCredentials,
+} from "../types/emailTemplate";
+import config from "../config";
 
-const BRAND_NAME = 'Loggistick';
+const BRAND_NAME = "Loggistick";
 const BRAND_LOGO =
-  'https://res.cloudinary.com/dnsktebcu/image/upload/v1789443746/logo_1_w0yohk.png';
-const BRAND_COLOR = '#1E4A8C';
+  "https://res.cloudinary.com/dnsktebcu/image/upload/v1789443746/logo_1_w0yohk.png";
+const BRAND_COLOR = "#1E4A8C";
 
 const logoHtml = `
     <img src="${BRAND_LOGO}" alt="${BRAND_NAME} Logo" style="display: block; margin: 0 auto 20px; width:150px" />
@@ -15,10 +19,10 @@ const footerHtml = `
 `;
 
 const createAccount = (values: ICreateAccount) => {
-    const data = {
-        to: values.email,
-        subject: `Verify your ${BRAND_NAME} account`,
-        html: `
+  const data = {
+    to: values.email,
+    subject: `Verify your ${BRAND_NAME} account`,
+    html: `
             <body style="font-family: Arial, sans-serif; background-color: #f9f9f9; margin: 50px; padding: 20px; color: #555;">
                 <div style="width: 100%; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fff; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
 
@@ -40,16 +44,16 @@ const createAccount = (values: ICreateAccount) => {
                 </div>
             </body>
         `,
-    };
+  };
 
-    return data;
+  return data;
 };
 
 const resetPassword = (values: IResetPassword) => {
-    const data = {
-        to: values.email,
-        subject: `Reset your ${BRAND_NAME} password`,
-        html: `
+  const data = {
+    to: values.email,
+    subject: `Reset your ${BRAND_NAME} password`,
+    html: `
             <body style="font-family: Arial, sans-serif; background-color: #f9f9f9; margin: 50px; padding: 20px; color: #555;">
                 <div style="width: 100%; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fff; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
 
@@ -71,16 +75,16 @@ const resetPassword = (values: IResetPassword) => {
                 </div>
             </body>
         `,
-    };
-    return data;
+  };
+  return data;
 };
 
 const userCredentials = (values: IUserCredentials) => {
-    const downloadAppUrl = values.downloadAppUrl || config.app.downloadUrl;
-    const data = {
-        to: values.email,
-        subject: `Your ${BRAND_NAME} account credentials`,
-        html: `
+  const downloadAppUrl = values.downloadAppUrl || config.app.downloadUrl;
+  const data = {
+    to: values.email,
+    subject: `Your ${BRAND_NAME} account credentials`,
+    html: `
             <body style="font-family: Arial, sans-serif; background-color: #f9f9f9; margin: 50px; padding: 20px; color: #555;">
                 <div style="width: 100%; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fff; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
 
@@ -107,13 +111,13 @@ const userCredentials = (values: IUserCredentials) => {
                 </div>
             </body>
         `,
-    };
+  };
 
-    return data;
+  return data;
 };
 
 export const emailTemplate = {
-    createAccount,
-    resetPassword,
-    userCredentials,
+  createAccount,
+  resetPassword,
+  userCredentials,
 };

@@ -1,9 +1,10 @@
-import { format } from "date-fns";
+import { endOfMonth, format } from "date-fns";
 import { USER_ROLES } from "../../../enums/user";
 import QueryBuilder from "../../builder/queryBuilder";
 import { Booking } from "../booking/booking.model";
 import { User } from "../user/user.model";
 import { DASHBOARD_SEARCHABLE_FIELDS } from "./dashboard.constants";
+import { Vehicle } from "../vehicle/vehicle.model";
 
 const dashboardOverviewFromDB = async () => {
   const today = format(new Date(), "yyyy-MM-dd");
@@ -99,8 +100,64 @@ const pendingTripsFromDB = async (query: Record<string, any>) => {
   };
 };
 
+// admin dashboard
+const getAdminDashboardOverviewFromDB = async () => {
+  // total vehicles, total Driver, total Trip (This month), total Revenue
+  const [totalVehicles, totalDrivers, totalTrips] = await Promise.all([
+    Vehicle.countDocuments(),
+    User.countDocuments({ role: USER_ROLES.DRIVER }),
+    Booking.countDocuments({
+      serviceDate: {
+        $gte: new Date(new Date().setMonth(new Date().getMonth() - 1)),
+      },
+    }),
+  ]);
+  const totalRevenue = 0;
+  return {
+    totalVehicles,
+    totalDrivers,
+    totalTrips,
+    totalRevenue,
+  };
+};
+// trip distribution base on 12 months jan to dec
+const getAdminTripDistributionFromDB = async () => {
+  const months = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+  const year = new Date().getFullYear();
+  const tripDistribution = await Promise.all(
+    months.map(async (month, index) => {
+      const start = new Date(year, index, 1);
+      const range = {
+        $gte: format(start, "yyyy-MM-dd"),
+        $lte: format(endOfMonth(start), "yyyy-MM-dd"),
+      };
+      const [oneWayTrips, roundTripTrips] = await Promise.all([
+        Booking.countDocuments({ tripType: "one-way", serviceDate: range }),
+        Booking.countDocuments({ tripType: "round-trip", serviceDate: range }),
+      ]);
+      return { month, oneWayTrips, roundTripTrips };
+    }),
+  );
+  return tripDistribution;
+};
+
 export const DashboardServices = {
   dashboardOverviewFromDB,
   activeTripsFromDB,
   pendingTripsFromDB,
+  getAdminDashboardOverviewFromDB,
+  getAdminTripDistributionFromDB,
 };

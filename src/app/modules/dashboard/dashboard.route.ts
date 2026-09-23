@@ -20,4 +20,14 @@ router.get(
   auth(USER_ROLES.SUPER_ADMIN),
   DashboardController.pendingTrips,
 );
+router.get(
+  "/admin/trip-distribution",
+  auth(USER_ROLES.SUPER_ADMIN),
+  DashboardController.getAdminTripDistribution,
+);
+router.get(
+  "/admin/dashboard-overview",
+  auth(USER_ROLES.SUPER_ADMIN),
+  DashboardController.getAdminDashboardOverview,
+);
 export const DashboardRoutes = router;

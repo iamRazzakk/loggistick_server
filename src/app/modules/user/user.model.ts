@@ -11,24 +11,24 @@ const driverDataSchema = new Schema<IDriverData>(
     driverExperience: {
       type: String,
       enum: ["1-3 years", "4-6 years", "7-10 years", "11-15 years"],
-      required: true,
+      required: false,
     },
     licenseNumber: {
       type: String,
-      required: true,
+      required: false,
     },
     licenseClass: {
       type: String,
       enum: ["A", "B", "C"],
-      required: true,
+      required: false,
     },
     expirationDate: {
       type: Date,
-      required: true,
+      required: false,
     },
     licenseImage: {
-      type: String,
-      required: true,
+      type: [String],
+      required: false,
     },
   },
   {

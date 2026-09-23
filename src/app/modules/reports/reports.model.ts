@@ -3,7 +3,7 @@ import { IReports, ReportsModel } from "./reports.interface";
 
 const reportsSchema = new Schema<IReports, ReportsModel>(
   {
-    driverId: {
+    userId: {
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
@@ -30,5 +30,5 @@ const reportsSchema = new Schema<IReports, ReportsModel>(
   },
   { timestamps: true },
 );
-reportsSchema.index({ driverId: 1, reportedBy: 1 });
+reportsSchema.index({ userId: 1, reportedBy: 1 });
 export const Reports = model<IReports, ReportsModel>("Reports", reportsSchema);

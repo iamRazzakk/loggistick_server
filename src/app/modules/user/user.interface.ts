@@ -6,7 +6,7 @@ export interface IDriverData {
   licenseNumber: string;
   licenseClass: "A" | "B" | "C";
   expirationDate: Date;
-  licenseImage: string;
+  licenseImage: string[];
 }
 // Main User interface
 export type IUser = {
@@ -47,5 +47,3 @@ export type UserModal = {
   isAccountCreated(id: string): any;
   isMatchPassword(password: string, hashPassword: string): boolean;
 } & Model<IUser>;
-
-// need to add county

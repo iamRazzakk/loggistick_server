@@ -40,8 +40,36 @@ const pendingTrips = catchAsync(
     });
   },
 );
+
+
+const getAdminTripDistribution = catchAsync(
+  async (_req: Request, res: Response, _next: NextFunction) => {
+    const result = await DashboardServices.getAdminTripDistributionFromDB();
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: "Trip distribution fetched successfully",
+      data: result,
+    });
+  },
+);  
+
+const getAdminDashboardOverview = catchAsync(
+  async (_req: Request, res: Response, _next: NextFunction) => {
+    const result = await DashboardServices.getAdminDashboardOverviewFromDB();
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: "Dashboard overview fetched successfully",
+      data: result,
+    });
+  },
+);
+
 export const DashboardController = {
   dashboardOverview,
   activeTrips,
   pendingTrips,
+  getAdminTripDistribution,
+  getAdminDashboardOverview,
 };

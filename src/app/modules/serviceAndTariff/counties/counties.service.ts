@@ -45,6 +45,7 @@ const getAllCountiesFromDB = async (payersId?: string) => {
   }
 
   const result = await County.find(filter)
+    .select("payersId")
     .populate("payersId", "name type isActive")
     .lean();
 

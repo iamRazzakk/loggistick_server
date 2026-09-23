@@ -1,11 +1,25 @@
 import { z } from "zod";
 const reportZodSchema = z.object({
-  reportStatus: z.enum(["pending", "approved", "rejected"], {
-    required_error: "Report Status is required",
-  }),
-  documents: z.string({
-    required_error: "Documents is required",
-  }),
+  userId: z
+    .string({
+      required_error: "User ID is required",
+    })
+    .optional(),
+  reportedBy: z
+    .string({
+      required_error: "Reported By is required",
+    })
+    .optional(),
+  tripId: z
+    .string({
+      required_error: "Trip ID is required",
+    })
+    .optional(),
+  documents: z
+    .string({
+      required_error: "Documents is required",
+    })
+    .optional(),
 });
 
 const createReportZodSchema = z.object({
