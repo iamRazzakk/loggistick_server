@@ -78,7 +78,7 @@ router
 
 router
   .route("/drivers")
-  .get(auth(USER_ROLES.SUPER_ADMIN), UserController.getAllDrivers);
+  .get(auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.USER), UserController.getAllDrivers);
 
 router
   .route("/riders")
