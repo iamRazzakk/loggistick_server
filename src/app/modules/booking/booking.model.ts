@@ -17,15 +17,15 @@ const bookingSchema = new Schema<IBooking, BookingModel>(
 
     // pickup and drop off and county coverage
     pickupLocation: {
-      type: Number,
+      type: [Number],
       required: true,
     },
     dropOffLocation: {
-      type: Number,
+      type: [Number],
       required: true,
     },
     stopAddress: {
-      type: Number,
+      type: [Number],
       required: false,
     },
 

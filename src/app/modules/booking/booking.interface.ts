@@ -25,9 +25,9 @@ export type IBooking = {
   // user data
   userId: Types.ObjectId;
   // pickup and drop
-  pickupLocation: number;
-  dropOffLocation: number;
-  stopAddress?: number;
+  pickupLocation: number[];
+  dropOffLocation: number[];
+  stopAddress?: number[];
   // mobility requirements
   mobilityRequirements: Types.ObjectId;
   // note

@@ -27,13 +27,17 @@ const APPOINTMENT_TYPES = Object.values(AppointmentType) as [
 const bookingBodySchema = z.object({
   userId: checkValidID("Valid userId is required").optional(),
 
-  pickupLocation: z.number({
-    required_error: "Pickup location is required",
-  }),
-  dropOffLocation: z.number({
-    required_error: "Drop off location is required",
-  }),
-  stopAddress: z.number().optional(),
+  pickupLocation: z
+    .array(z.number(), {
+      required_error: "Pickup location is required",
+    })
+    .length(2, { message: "Pickup location must be an array of 2 numbers" }),
+  dropOffLocation: z
+    .array(z.number(), {
+      required_error: "Drop off location is required",
+    })
+    .length(2, { message: "Drop off location must be an array of 2 numbers" }),
+  stopAddress: z.array(z.number()).optional(),
 
   mobilityRequirements: checkValidID("Valid mobilityRequirements is required"),
 

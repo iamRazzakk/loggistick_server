@@ -74,7 +74,7 @@ const priceByMethod = (county: ICounty, miles: number) => {
   return band.first_miles_price + extraMiles * band.per_mile_price;
 };
 
-export const getTripPrice  = async (input: {
+export const getTripPrice = async (input: {
   pickup: LngLat;
   dropoff: LngLat;
   stop?: LngLat;
@@ -133,13 +133,11 @@ export const getTripPrice  = async (input: {
   }
 
   return {
-    price: Number(total.toFixed(2)),
-    miles: Number(miles.toFixed(2)),
+    totalPrice: Number(total.toFixed(2)),
+    milesPrice: Number(miles.toFixed(2)),
+    mobilityTotalPrice: Number(mobilityPrice.toFixed(2)),
     priceMethod: pickupCounty.priceMethod,
     countyId: pickupCounty._id,
     zone: fullyInside ? "inside" : "outside",
-    base: Number(base.toFixed(2)),
-    zoneFee,
-    mobilityPrice,
   };
 };
