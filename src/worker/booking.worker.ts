@@ -40,8 +40,8 @@ const createRecurringBookings = async (job: Job) => {
       recurringBatchId,
       userId: new Types.ObjectId(payload.userId),
       mobilityRequirements: new Types.ObjectId(payload.mobilityRequirements),
-      payerSource: new Types.ObjectId(payload.payerSource),
-      driverId: new Types.ObjectId(payload.driverId),
+      payerSource: new Types.ObjectId(payload.payerSource) || null,
+      driverId: new Types.ObjectId(payload.driverId) || null,
     }));
 
     const created = [];

@@ -5,6 +5,7 @@ import { USER_ROLES } from "../../../../enums/user";
 import { Booking } from "../../booking/booking.model";
 import { Types } from "mongoose";
 import { addDays, format } from "date-fns";
+import { Driverrating } from "../../driverrating/driverrating.model";
 
 const assertCanViewBooking = (
   user: JwtPayload,
@@ -21,10 +22,13 @@ const assertCanViewBooking = (
   }
 };
 
-const getMyBookingsOnGoingDataFromDB = async (user: JwtPayload) => {
+const getMyBookingsOnGoingDataFromDB = async (
+  user: JwtPayload,
+  query: Record<string, unknown>,
+) => {
   const bookings = await Booking.find({
     userId: user.id,
-    bookingStatus: "in-progress",
+    ...(query.bookingStatus ? { bookingStatus: query.bookingStatus } : {}),
   }).lean();
   return bookings;
 };
@@ -34,6 +38,7 @@ const getMyBookingDetailsDataFromDB = async (user: JwtPayload, id: string) => {
   if (!booking) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
   }
+  // @ts-ignore
   assertCanViewBooking(user, booking);
   return booking;
 };
@@ -47,10 +52,15 @@ const getAllUpcomingBookingsFromDB = async (user: JwtPayload) => {
       { driverId: new Types.ObjectId(user.id) },
     ],
     serviceDate: { $gte: tomorrow },
-  }).lean();
+  })
+    .populate({
+      path: "driverId",
+      select: "firstName lastName middleName profile contuct",
+    })
+    .lean();
   return bookings[0];
 };
-// last je booking completed hoise seta show krbe
+// need to show only completed bookings
 const getRecentActivityFromDB = async (user: JwtPayload) => {
   const bookings = await Booking.find({
     $or: [
@@ -78,10 +88,53 @@ const getDriverOverviewDataFromDB = async (user: JwtPayload) => {
   return { totalTrips, totalCompletedTrips, totalEarnings };
 };
 
+// user on going booking
+const getUserOnGoingBookingTodayFromDB = async (user: JwtPayload) => {
+  const today = format(new Date(), "yyyy-MM-dd");
+  const booking = await Booking.findOne({
+    userId: new Types.ObjectId(user.id),
+    serviceDate: today,
+  })
+    .populate({
+      path: "driverId",
+      select: "firstName lastName middleName profile contact",
+    })
+    .lean();
+
+  if (!booking) return { driverRating: 0, totalTripCompleted: 0 };
+
+  const driverId = (booking.driverId as { _id?: Types.ObjectId } | null)?._id;
+  if (!driverId) {
+    return { ...booking, driverRating: 0, totalTripCompleted: 0 };
+  }
+
+  const [ratings, totalTripCompleted] = await Promise.all([
+    Driverrating.find({ driverId }).select("rating").lean(),
+    Booking.countDocuments({
+      driverId,
+      bookingStatus: "completed",
+    }),
+  ]);
+
+  const driverRating = ratings.length
+    ? ratings.reduce((sum, row) => sum + row.rating, 0) / ratings.length
+    : 0;
+
+  return {
+    ...booking,
+    driverId: {
+      ...(booking.driverId as object),
+      driverRating,
+      totalTripCompleted,
+    },
+  };
+};
+
 export const AppApiBookingService = {
   getMyBookingsOnGoingDataFromDB,
   getMyBookingDetailsDataFromDB,
   getAllUpcomingBookingsFromDB,
   getRecentActivityFromDB,
   getDriverOverviewDataFromDB,
+  getUserOnGoingBookingTodayFromDB,
 };

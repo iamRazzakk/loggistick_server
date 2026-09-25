@@ -51,10 +51,8 @@ const bookingBodySchema = z.object({
     .int()
     .min(1, { message: "Passenger seats must be at least 1" }),
 
-  payerSource: checkValidID("Valid payerSource is required"),
-  programContext: z.string({
-    required_error: "Program context is required",
-  }),
+  payerSource: z.string().optional(),
+  programContext: z.string().optional(),
 
   serviceDate: z.string({
     required_error: "Service date is required",
@@ -71,7 +69,7 @@ const bookingBodySchema = z.object({
   selectedDate: z.array(z.enum(WEEKDAYS)).optional(),
   endDate: z.string().optional(),
 
-  driverId: checkValidID("Valid driverId is required"),
+  driverId: checkValidID("Valid driverId is required").optional(),
 
   bookingStatus: z.enum(BOOKING_STATUSES).optional().default("pending"),
 

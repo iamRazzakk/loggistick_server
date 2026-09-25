@@ -13,6 +13,10 @@ import {
   bookingQueueEvents,
   CREATE_RECURRING_BOOKINGS_JOB,
 } from "../../../queue/booking.queue";
+import { User } from "../user/user.model";
+import { USER_ROLES } from "../../../enums/user";
+import { County } from "../serviceAndTariff/counties/counties.model";
+import { getTripPrice } from "./booking.utils";
 
 const JOB_WAIT_MS = 120_000;
 
@@ -32,6 +36,12 @@ const toBookingErrorMessage = (error: unknown) => {
 };
 
 const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
+  const isAdmin = await User.findById({ _id: user.id }).select("role");
+  if (isAdmin?.role === USER_ROLES.SUPER_ADMIN) {
+    payload.isApproved = "approved";
+  } else {
+    payload.isApproved = "pending";
+  }
   if (payload.userId) {
     payload.userId = new Types.ObjectId(payload.userId);
   } else {
@@ -84,8 +94,8 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
         ...payload,
         userId: payload.userId.toString(),
         mobilityRequirements: payload.mobilityRequirements.toString(),
-        payerSource: payload.payerSource.toString(),
-        driverId: payload.driverId.toString(),
+        payerSource: payload.payerSource?.toString() || null,
+        driverId: payload.driverId?.toString() || null,
         selectedDate: selectedDays,
         bookingStatus: "pending",
         recurringBatchId,
@@ -129,18 +139,14 @@ const getAllMyBookingsFromDB = async (
   return { data, meta };
 };
 
-// all bookings
+// all pending bookings
 const getAllBookingsFromDB = async (
   user: JwtPayload,
   query: Record<string, any>,
 ) => {
-  const userId = user.id;
   const qb = new QueryBuilder(
     Booking.find({
-      $or: [
-        { userId: new Types.ObjectId(userId) },
-        { driverId: new Types.ObjectId(userId) },
-      ],
+      isApproved: "pending",
     }),
     query,
   )
@@ -154,6 +160,7 @@ const getAllBookingsFromDB = async (
       "driverId.lastName",
       "driverId.middleName",
       "bookingStatus",
+      "isApproved",
     ])
     .filter()
     .search(["payerSource"])
@@ -169,7 +176,26 @@ const getAllBookingsFromDB = async (
   return { data, meta };
 };
 
-// trip history (driver)
+// all approved bookings
+const getAllApprovedBookingsFromDB = async (
+  user: JwtPayload,
+  query: Record<string, any>,
+) => {
+  const qb = new QueryBuilder(Booking.find({ isApproved: "approved" }), query)
+    .filter()
+    .sort()
+    .search(["bookingStatus", "tripReason", "tripNote"])
+    .populate(["userId"], {
+      userId: "firstName lastName middleName profile",
+    });
+  const [data, meta] = await Promise.all([
+    qb.modelQuery.exec(),
+    qb.getPaginationInfo(),
+  ]);
+  return { data, meta };
+};
+
+// trip history
 const getTripHistoryFromDB = async (
   user: JwtPayload,
   query: Record<string, any>,
@@ -181,16 +207,18 @@ const getTripHistoryFromDB = async (
   }
 
   const qb = new QueryBuilder(
-    Booking.find({ serviceDate: { $lt: today } }),
+    Booking.find({
+      driverId: { $exists: true, $ne: null },
+      bookingStatus: { $ne: "pending" },
+    }),
     restQuery,
   )
     .filter()
     .sort()
-    .search(["bookingStatus", "tripReason", "tripNote", "driverId._id"])
-    .populate(["userId", "driverId", "vehicleId"], {
+    .search(["bookingStatus", "tripReason", "tripNote"])
+    .populate(["userId", "driverId"], {
       userId: "firstName lastName middleName profile",
       driverId: "firstName lastName middleName profile",
-      vehicleId: "model",
     })
     .sort()
     .fields()
@@ -221,20 +249,14 @@ const getBookingByIdFromDB = async (id: string) => {
   return booking;
 };
 
+// scheduled bookings
 const getScheduledBookingsFromDB = async (query: Record<string, any>) => {
-  const { date, bookingStatus } = query;
-  if (!date) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, "date is required");
-  }
-
   const bookings = await Booking.find({
-    serviceDate: date,
-    bookingStatus,
+    serviceDate: { $gte: format(new Date(), "yyyy-MM-dd") },
   })
     .populate([
       { path: "userId", select: "firstName lastName middleName profile" },
       { path: "driverId", select: "firstName lastName middleName profile" },
-      { path: "vehicleId", select: "model" },
     ])
     .lean();
   const grouped = new Map<string, { driver: any; bookings: any[] }>();
@@ -255,10 +277,11 @@ const getScheduledBookingsFromDB = async (query: Record<string, any>) => {
 
   return Array.from(grouped.values()).map((item) => ({
     driver: item.driver,
-    serviceDate: date,
+    serviceDate: format(new Date(item.bookings[0]?.serviceDate), "yyyy-MM-dd"),
     bookings: item.bookings,
   }));
 };
+
 // single rider booking history
 
 const getSingleRiderBookingHistoryFromDB = async (id: string) => {
@@ -266,20 +289,39 @@ const getSingleRiderBookingHistoryFromDB = async (id: string) => {
     .populate([
       { path: "userId", select: "firstName lastName middleName profile" },
       { path: "driverId", select: "firstName lastName middleName profile" },
-      // { path: "vehicleId", select: "model" },
     ])
     .sort("-serviceDate")
     .lean();
   return bookings;
 };
 
+const calculateTotalTripPrice = async (
+  pickupLocation: [number, number],
+  dropoffLocation: [number, number],
+  stopAddress?: [number, number],
+  payerId?: string,
+  tripType: "one-way" | "round-trip" = "one-way",
+  mobilityRequirements?: string,
+) => {
+  return await getTripPrice({
+    pickup: pickupLocation,
+    dropoff: dropoffLocation,
+    stop: stopAddress,
+    payerId,
+    tripType,
+    mobilityRequirements,
+  });
+};
+
 export const BookingServices = {
   createBookingIntoDB,
   getAllMyBookingsFromDB,
   getAllBookingsFromDB,
+  getAllApprovedBookingsFromDB,
   getTripHistoryFromDB,
   updateBookingInDB,
   getBookingByIdFromDB,
   getScheduledBookingsFromDB,
   getSingleRiderBookingHistoryFromDB,
+  calculateTotalTripPrice,
 };

@@ -13,6 +13,11 @@ const messageSchema = new Schema<IMessage, MessageModel>(
       required: true,
       ref: 'User',
     },
+    receiver: {
+      type: Schema.Types.ObjectId,
+      required: true,
+      ref: 'User',
+    },
     text: { 
       type: String,
       required: false 

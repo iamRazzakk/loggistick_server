@@ -1,12 +1,13 @@
-import { IMessage } from './message.interface';
-import { Message } from './message.model';
+import { JwtPayload } from "jsonwebtoken";
+import { IMessage } from "./message.interface";
+import { Message } from "./message.model";
 
-const sendMessageToDB = async (payload: any): Promise<IMessage> => {
-
-
-  
+const sendMessageToDB = async (
+  payload: any,
+  user: JwtPayload,
+): Promise<IMessage> => {
   // save to DB
-
+  payload.sender = user.id;
   const response = await Message.create(payload);
 
   //@ts-ignore
@@ -19,8 +20,7 @@ const sendMessageToDB = async (payload: any): Promise<IMessage> => {
 };
 
 const getMessageFromDB = async (id: any): Promise<IMessage[]> => {
-  const messages = await Message.find({ chatId: id })
-    .sort({ createdAt: -1 })
+  const messages = await Message.find({ chatId: id }).sort({ createdAt: -1 });
   return messages;
 };
 

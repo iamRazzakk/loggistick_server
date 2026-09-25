@@ -20,6 +20,9 @@ import { ScheduledRoutes } from "../modules/scheduled/scheduled.route";
 import { VehicleAssignRoutes } from "../modules/vehicleassign/vehicleassign.route";
 import { DriverratingRoutes } from "../modules/driverrating/driverrating.route";
 import { AppApiBookingRoutes } from "../modules/appApi/apiBooking/booking.routes";
+import { ChatRoutes } from "../modules/chat/chat.routes";
+import { MessageRoutes } from "../modules/message/message.routes";
+import { BankcardRoutes } from "../modules/bankcard/bankcard.route";
 
 const router = express.Router();
 
@@ -45,6 +48,9 @@ const apiRoutes = [
   { path: "/vehicle-assign", route: VehicleAssignRoutes },
   { path: "/ratings", route: DriverratingRoutes },
   { path: "/my-ongoing-bookings", route: AppApiBookingRoutes },
+  { path: "/chat", route: ChatRoutes },
+  { path: "/message", route: MessageRoutes },
+  { path: "/bankcard", route: BankcardRoutes },
 ];
 
 apiRoutes.forEach((route) => router.use(route.path, route.route));

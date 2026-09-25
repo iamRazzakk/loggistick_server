@@ -119,7 +119,7 @@ const updateCountiesFromDB = async (id: string, payload: Partial<ICounty>) => {
     throw new ApiError(StatusCodes.NOT_FOUND, "County not found");
   }
 
-  await redisService.del(COUNTIES_CACHE_KEY);
+  await redisService.del(COUNTIES_ADMIN_CACHE_KEY);
   return result;
 };
 
@@ -163,6 +163,14 @@ const findCountyByLocationFromDB = async (lng: number, lat: number) => {
   return result;
 };
 
+const updateCountiesAdminFromDB = async (id: string, payload: Partial<ICounty>) => {
+  const result = await County.findByIdAndUpdate(id, payload, {
+    new: true,
+    runValidators: true,
+  });
+  return result;
+};
+
 export const CountiesService = {
   createCountiesIntoDB,
   getAllCountiesFromDB,
@@ -171,4 +179,5 @@ export const CountiesService = {
   deleteCountiesFromDB,
   findCountyByLocationFromDB,
   getAllCountiesForAdmin,
+  updateCountiesAdminFromDB
 };

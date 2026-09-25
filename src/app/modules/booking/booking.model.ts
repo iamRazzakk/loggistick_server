@@ -63,11 +63,11 @@ const bookingSchema = new Schema<IBooking, BookingModel>(
     payerSource: {
       type: Schema.Types.ObjectId,
       ref: "Payers",
-      required: true,
+      required: false,
     },
     programContext: {
       type: String,
-      required: true,
+      required: false,
     },
     serviceDate: {
       type: String,
@@ -110,11 +110,18 @@ const bookingSchema = new Schema<IBooking, BookingModel>(
     driverId: {
       type: Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      required: false,
     },
     bookingStatus: {
       type: String,
-      enum: ["pending", "assigned", "in-progress", "confirmed", "cancelled", "completed"],
+      enum: [
+        "pending",
+        "assigned",
+        "in-progress",
+        "confirmed",
+        "cancelled",
+        "completed",
+      ],
       required: true,
       default: "pending",
     },
@@ -128,6 +135,11 @@ const bookingSchema = new Schema<IBooking, BookingModel>(
       type: Number,
       required: false,
       default: 0,
+    },
+    isApproved: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      required: false,
     },
   },
   {

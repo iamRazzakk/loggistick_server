@@ -42,7 +42,7 @@ export type IBooking = {
 
   // County source
   payerSource: Types.ObjectId;
-  programContext: string;
+  programContext?: string;
 
   // service
   serviceDate: string;
@@ -63,7 +63,7 @@ export type IBooking = {
 
   endDate?: string;
   // driver
-  driverId: Types.ObjectId;
+  driverId?: Types.ObjectId;
   // booking status
   bookingStatus:
     | "pending"
@@ -74,6 +74,7 @@ export type IBooking = {
     | "completed";
   recurringBatchId?: string;
   price?: number;
+  isApproved?: "pending" | "approved" | "rejected";
 };
 
 export type BookingModel = Model<IBooking>;

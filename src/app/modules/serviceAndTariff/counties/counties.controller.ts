@@ -49,6 +49,7 @@ const getSingleCounty = catchAsync(async (req: Request, res: Response) => {
 
 const updateCounties = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
+  console.log("====>>req.body", req.body);
   const result = await CountiesService.updateCountiesFromDB(id, req.body);
   sendResponse(res, {
     statusCode: StatusCodes.OK,
@@ -81,6 +82,16 @@ const checkLocation = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const updateCountiesAdmin = catchAsync(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const result = await CountiesService.updateCountiesAdminFromDB(id, req.body);
+  sendResponse(res, {
+    statusCode: StatusCodes.OK,
+    success: true,
+    message: "County updated successfully",
+    data: result,
+  });
+});
 export const CountiesController = {
   createCounties,
   getAllCounties,
@@ -89,4 +100,5 @@ export const CountiesController = {
   deleteCounties,
   checkLocation,
   getAllCountiesAdmin,
+  updateCountiesAdmin,
 };

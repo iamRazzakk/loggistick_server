@@ -33,6 +33,13 @@ router
   );
 
 router
+  .route("/today")
+  .get(
+    auth(USER_ROLES.USER),
+    AppApiBookingController.getUserOnGoingBookingToday,
+  );
+
+router
   .route("/:id")
   .get(
     auth(USER_ROLES.USER, USER_ROLES.DRIVER, USER_ROLES.SUPER_ADMIN),

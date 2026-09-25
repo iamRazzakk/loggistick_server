@@ -1,8 +1,9 @@
-import { Model, Types } from 'mongoose';
+import { Model, Types } from "mongoose";
 
 export type IMessage = {
   chatId: Types.ObjectId;
   sender: Types.ObjectId;
+  receiver: Types.ObjectId;
   text?: string;
   image?: string;
 };

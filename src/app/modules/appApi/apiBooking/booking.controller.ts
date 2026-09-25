@@ -8,6 +8,7 @@ const getMyBookingsOnGoingData = catchAsync(
   async (req: Request, res: Response) => {
     const bookings = await AppApiBookingService.getMyBookingsOnGoingDataFromDB(
       req.user,
+      req.query,
     );
     sendResponse(res, {
       success: true,
@@ -33,7 +34,6 @@ const getMyBookingDetailsData = catchAsync(
   },
 );
 
-
 const getAllUpcomingBookings = catchAsync(
   async (req: Request, res: Response) => {
     const bookings = await AppApiBookingService.getAllUpcomingBookingsFromDB(
@@ -48,19 +48,15 @@ const getAllUpcomingBookings = catchAsync(
   },
 );
 
-const getRecentActivity = catchAsync(
-  async (req: Request, res: Response) => {
-    const bookings = await AppApiBookingService.getRecentActivityFromDB(
-      req.user,
-    );
-    sendResponse(res, {
-      success: true,
-      statusCode: StatusCodes.OK,
-      message: "Bookings fetched successfully",
-      data: bookings,
-    });
-  },
-);
+const getRecentActivity = catchAsync(async (req: Request, res: Response) => {
+  const bookings = await AppApiBookingService.getRecentActivityFromDB(req.user);
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Bookings fetched successfully",
+    data: bookings,
+  });
+});
 
 const getDriverOverviewData = catchAsync(
   async (req: Request, res: Response) => {
@@ -76,10 +72,25 @@ const getDriverOverviewData = catchAsync(
   },
 );
 
+const getUserOnGoingBookingToday = catchAsync(
+  async (req: Request, res: Response) => {
+    const booking = await AppApiBookingService.getUserOnGoingBookingTodayFromDB(
+      req.user,
+    );
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: "Booking fetched successfully",
+      data: booking,
+    });
+  },
+);
+
 export const AppApiBookingController = {
   getMyBookingsOnGoingData,
   getMyBookingDetailsData,
   getAllUpcomingBookings,
   getRecentActivity,
   getDriverOverviewData,
+  getUserOnGoingBookingToday,
 };

@@ -9,15 +9,13 @@ const router = express.Router();
 
 router
   .route("/")
+  // create booking API
   .post(
-    auth(
-      USER_ROLES.DISPATCHER,
-      USER_ROLES.SUPER_ADMIN,
-      USER_ROLES.USER,
-    ),
+    auth(USER_ROLES.DISPATCHER, USER_ROLES.SUPER_ADMIN, USER_ROLES.USER),
     validateRequest(BookingValidations.createBookingZodSchema),
     BookingController.createBooking,
   )
+  // all pending bookings API
   .get(
     auth(
       // USER_ROLES.DISPATCHER,
@@ -27,6 +25,14 @@ router
     ),
     BookingController.getAllBookings,
   );
+// ready to assign bookings API
+router
+  .route("/approved")
+  .get(
+    auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+    BookingController.getAllApprovedBookings,
+  );
+// my bookings API
 router
   .route("/my")
   .get(
@@ -38,6 +44,8 @@ router
     ),
     BookingController.getAllMyBookings,
   );
+
+// trip history API
 router
   .route("/history")
   .get(
@@ -57,6 +65,10 @@ router
     auth(USER_ROLES.DISPATCHER, USER_ROLES.DRIVER, USER_ROLES.SUPER_ADMIN),
     BookingController.getScheduledBookings,
   );
+// calculate total trip price
+router
+  .route("/calculate-price")
+  .post(BookingController.calculateTotalTripPrice);
 router
   .route("/:id")
   .get(
@@ -82,6 +94,9 @@ router
 // single rider booking history
 router
   .route("/rider/:id")
-  .get(auth(USER_ROLES.SUPER_ADMIN), BookingController.getSingleRiderBookingHistory);
+  .get(
+    auth(USER_ROLES.SUPER_ADMIN),
+    BookingController.getSingleRiderBookingHistory,
+  );
 
 export const BookingRoutes = router;

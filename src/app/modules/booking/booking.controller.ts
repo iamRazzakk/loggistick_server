@@ -33,7 +33,6 @@ const getAllBookings = catchAsync(async (req: Request, res: Response) => {
     req.user,
     req.query,
   );
-  console.log("=====================>Bookings");
   sendResponse(res, {
     statusCode: StatusCodes.OK,
     success: true,
@@ -42,6 +41,21 @@ const getAllBookings = catchAsync(async (req: Request, res: Response) => {
     data: bookings.data,
   });
 });
+const getAllApprovedBookings = catchAsync(
+  async (req: Request, res: Response) => {
+    const bookings = await BookingServices.getAllApprovedBookingsFromDB(
+      req.user,
+      req.query,
+    );
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: "Approved bookings fetched successfully",
+      pagination: bookings.meta,
+      data: bookings.data,
+    });
+  },
+);
 
 const getTripHistory = catchAsync(async (req: Request, res: Response) => {
   const bookings = await BookingServices.getTripHistoryFromDB(
@@ -104,13 +118,34 @@ const getSingleRiderBookingHistory = catchAsync(
   },
 );
 
+const calculateTotalTripPrice = catchAsync(
+  async (req: Request, res: Response) => {
+    const price = await BookingServices.calculateTotalTripPrice(
+      req.body.pickup,
+      req.body.dropoff,
+      req.body.stop,
+      req.body.payerId,
+      req.body.tripType,
+      req.body.mobilityRequirements,
+    );
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: "Total trip price calculated successfully",
+      data: price,
+    });
+  },
+);
+
 export const BookingController = {
   createBooking,
   getAllMyBookings,
   getAllBookings,
+  getAllApprovedBookings,
   getTripHistory,
   updateBooking,
   getBookingById,
   getScheduledBookings,
   getSingleRiderBookingHistory,
+  calculateTotalTripPrice,
 };

@@ -66,8 +66,7 @@ router
           data.profile = profilePath;
         }
         // need to parse the body
-        const parsedBody = JSON.parse(data);
-        req.body = parsedBody;
+        req.body = parseBody(data);
         next();
       } catch (error) {
         next(error);
@@ -78,7 +77,10 @@ router
 
 router
   .route("/drivers")
-  .get(auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.USER), UserController.getAllDrivers);
+  .get(
+    auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.USER),
+    UserController.getAllDrivers,
+  );
 
 router
   .route("/riders")
