@@ -33,6 +33,23 @@ router
   );
 
 router
+  .route("/current")
+  .get(
+    auth(USER_ROLES.DRIVER),
+    AppApiBookingController.getDriverCurrentBooking,
+  );
+
+// driver next trip
+router
+  .route("/next-trip")
+  .get(auth(USER_ROLES.DRIVER), AppApiBookingController.getDriverNextTrip);
+
+// driver all trip list
+router
+  .route("/all-trips")
+  .get(auth(USER_ROLES.DRIVER), AppApiBookingController.getAllDriverTripsList);
+// user today booking
+router
   .route("/today")
   .get(
     auth(USER_ROLES.USER),

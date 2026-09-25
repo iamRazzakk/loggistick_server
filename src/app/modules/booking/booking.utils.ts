@@ -141,3 +141,19 @@ export const getTripPrice = async (input: {
     zone: fullyInside ? "inside" : "outside",
   };
 };
+
+
+export const toBookingErrorMessage = (error: unknown) => {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "";
+
+  if (message.toLowerCase().includes("timed out")) {
+    return "Recurring booking creation is taking too long. Please try a shorter date range.";
+  }
+
+  return message || "Failed to create recurring bookings. Please try again.";
+};

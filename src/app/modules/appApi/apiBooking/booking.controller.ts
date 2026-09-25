@@ -86,6 +86,42 @@ const getUserOnGoingBookingToday = catchAsync(
   },
 );
 
+const getDriverCurrentBooking = catchAsync(
+  async (req: Request, res: Response) => {
+    const booking = await AppApiBookingService.getDriverCurrentBookingFromDB(
+      req.user,
+    );
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: "Booking fetched successfully",
+      data: booking,
+    });
+  },
+);
+
+const getDriverNextTrip = catchAsync(async (req: Request, res: Response) => {
+  const booking = await AppApiBookingService.getDriverNextTripFromDB(req.user);
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Next trip fetched successfully",
+    data: booking,
+  });
+});
+
+
+
+const getAllDriverTripsList = catchAsync(async (req: Request, res: Response) => {
+  const bookings = await AppApiBookingService.getAllDriverTripsListFromDB(req.user);
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "All driver trips list fetched successfully",
+    data: bookings,
+  });
+});
+
 export const AppApiBookingController = {
   getMyBookingsOnGoingData,
   getMyBookingDetailsData,
@@ -93,4 +129,7 @@ export const AppApiBookingController = {
   getRecentActivity,
   getDriverOverviewData,
   getUserOnGoingBookingToday,
+  getDriverCurrentBooking,
+  getDriverNextTrip,
+  getAllDriverTripsList,
 };

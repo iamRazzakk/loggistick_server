@@ -23,6 +23,7 @@ import { AppApiBookingRoutes } from "../modules/appApi/apiBooking/booking.routes
 import { ChatRoutes } from "../modules/chat/chat.routes";
 import { MessageRoutes } from "../modules/message/message.routes";
 import { BankcardRoutes } from "../modules/bankcard/bankcard.route";
+import { NotificationRoutes } from "../modules/notification/notification.routes";
 
 const router = express.Router();
 
@@ -39,6 +40,7 @@ const apiRoutes = [
   { path: "/rule", route: RuleRoutes },
   { path: "/faq", route: FaqRoutes },
   { path: "/push-notification", route: PushNotificationRoutes },
+  { path: "/notification", route: NotificationRoutes },
   { path: "/counties", route: CountiesRoutes },
   { path: "/mobility", route: MobilityRoutes },
   { path: "/payers", route: PayersRoutes },

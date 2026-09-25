@@ -15,30 +15,22 @@ import {
 } from "../../../queue/booking.queue";
 import { User } from "../user/user.model";
 import { USER_ROLES } from "../../../enums/user";
-import { County } from "../serviceAndTariff/counties/counties.model";
-import { getTripPrice } from "./booking.utils";
+import { getTripPrice, toBookingErrorMessage } from "./booking.utils";
+import { sendNotifications } from "../../../helpers/notificationsHelper";
 
 const JOB_WAIT_MS = 120_000;
-
-const toBookingErrorMessage = (error: unknown) => {
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === "string"
-        ? error
-        : "";
-
-  if (message.toLowerCase().includes("timed out")) {
-    return "Recurring booking creation is taking too long. Please try a shorter date range.";
-  }
-
-  return message || "Failed to create recurring bookings. Please try again.";
-};
 
 const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
   const isAdmin = await User.findById({ _id: user.id }).select("role");
   if (isAdmin?.role === USER_ROLES.SUPER_ADMIN) {
     payload.isApproved = "approved";
+    if (payload.driverId) {
+      await sendNotifications({
+        receiver: payload.driverId,
+        message: "New booking created",
+        data: payload,
+      });
+    }
   } else {
     payload.isApproved = "pending";
   }
@@ -53,7 +45,6 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
   if (!payload.recurringBooking) {
     return await Booking.create(payload);
   }
-
   if (!payload.endDate) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
@@ -67,7 +58,6 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
       "Please select at least one recurring day.",
     );
   }
-
   const selectedDays = Array.isArray(payload.selectedDate)
     ? payload.selectedDate
     : [payload.selectedDate];
@@ -76,16 +66,13 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
     payload.endDate,
     selectedDays,
   );
-
   if (!recurringDates.length) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
       "No booking dates found for the selected days and date range.",
     );
   }
-
   const recurringBatchId = randomUUID();
-
   try {
     await bookingQueueEvents.waitUntilReady();
     const job = await bookingQueue.add(CREATE_RECURRING_BOOKINGS_JOB, {
@@ -132,10 +119,12 @@ const getAllMyBookingsFromDB = async (
       driverId: "firstName lastName middleName profile",
     })
     .paginate();
+
   const [data, meta] = await Promise.all([
     qb.modelQuery.exec(),
     qb.getPaginationInfo(),
   ]);
+
   return { data, meta };
 };
 

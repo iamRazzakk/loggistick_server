@@ -30,7 +30,8 @@ export default {
     pass: process.env.EMAIL_PASS,
   },
   app: {
-    downloadUrl: process.env.APP_DOWNLOAD_URL || "https://loggistick.com/download",
+    downloadUrl:
+      process.env.APP_DOWNLOAD_URL || "https://loggistick.com/download",
   },
   social: {
     google_client_id: process.env.GOOGLE_CLIENT_ID,
@@ -47,12 +48,13 @@ export default {
     port: process.env.BULLMQPORT!,
   },
 
-
   twilio: {
     accountSid: process.env.TWILIO_ACCOUNT_SID,
     authToken: process.env.TWILIO_AUTH_TOKEN,
     twilioNumber: process.env.TWILIO_NUMBER,
   },
 
-    
+  googleMapApi: {
+    apiKey: process.env.GOOGLE_MAPS_API_KEY!,
+  },
 };

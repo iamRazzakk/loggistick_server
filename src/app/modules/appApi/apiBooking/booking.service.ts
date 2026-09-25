@@ -6,6 +6,7 @@ import { Booking } from "../../booking/booking.model";
 import { Types } from "mongoose";
 import { addDays, format } from "date-fns";
 import { Driverrating } from "../../driverrating/driverrating.model";
+import toMinutes from "./booking.helper";
 
 const assertCanViewBooking = (
   user: JwtPayload,
@@ -34,7 +35,12 @@ const getMyBookingsOnGoingDataFromDB = async (
 };
 
 const getMyBookingDetailsDataFromDB = async (user: JwtPayload, id: string) => {
-  const booking = await Booking.findById(id).lean();
+  const booking = await Booking.findById(id)
+    .populate({
+      path: "mobilityRequirements",
+      select: "name",
+    })
+    .lean();
   if (!booking) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
   }
@@ -130,6 +136,92 @@ const getUserOnGoingBookingTodayFromDB = async (user: JwtPayload) => {
   };
 };
 
+// driver on current booking (Trip maybe today lot's of but we need to show most recent one)
+
+const getDriverCurrentBookingFromDB = async (user: JwtPayload) => {
+  const now = new Date();
+  const today = format(now, "yyyy-MM-dd");
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const bookings = await Booking.find({
+    driverId: new Types.ObjectId(user.id),
+    serviceDate: today,
+    bookingStatus: { $ne: "cancelled" },
+  })
+    .populate({
+      path: "userId",
+      select: "firstName lastName middleName profile",
+    })
+    .lean();
+  const withTime = bookings
+    .map((booking) => ({
+      booking,
+      minutes: toMinutes(booking.pickupTime),
+    }))
+    .filter((row) => row.minutes !== null) as {
+    booking: (typeof bookings)[number];
+    minutes: number;
+  }[];
+  const unfinishedBeforeNow = withTime
+    .filter(
+      (row) =>
+        row.minutes <= nowMinutes && row.booking.bookingStatus !== "completed",
+    )
+    .sort((a, b) => a.minutes - b.minutes);
+  if (unfinishedBeforeNow.length > 0) {
+    return unfinishedBeforeNow[0].booking;
+  }
+  const nextTrip = withTime
+    .filter((row) => row.minutes > nowMinutes)
+    .sort((a, b) => a.minutes - b.minutes);
+  return nextTrip[0]?.booking ?? [];
+};
+
+// next 3 trips
+
+const getDriverNextTripFromDB = async (user: JwtPayload) => {
+  const current = await getDriverCurrentBookingFromDB(user);
+  const currentId =
+    current && !Array.isArray(current) && "_id" in current
+      ? String((current as { _id: unknown })._id)
+      : null;
+
+  const today = format(new Date(), "yyyy-MM-dd");
+  const bookings = await Booking.find({
+    driverId: new Types.ObjectId(user.id),
+    serviceDate: { $gte: today },
+    bookingStatus: { $nin: ["cancelled", "completed"] },
+    ...(currentId ? { _id: { $ne: currentId } } : {}),
+  })
+    .populate({
+      path: "userId",
+      select: "firstName lastName middleName profile",
+    })
+    .lean();
+
+  return bookings
+    .sort((a, b) => {
+      if (a.serviceDate !== b.serviceDate) {
+        return a.serviceDate < b.serviceDate ? -1 : 1;
+      }
+      return (toMinutes(a.pickupTime) ?? 0) - (toMinutes(b.pickupTime) ?? 0);
+    })
+    .slice(0, 3);
+};
+
+// Driver all trip list sort last create need to show in first
+const getAllDriverTripsListFromDB = async (user: JwtPayload) => {
+  const bookings = await Booking.find({
+    driverId: user.id,
+  })
+    .populate({
+      path: "userId",
+      select: "firstName lastName middleName profile",
+    })
+    .sort({ createdAt: -1 })
+    .lean();
+  return bookings ?? [];
+};
+
 export const AppApiBookingService = {
   getMyBookingsOnGoingDataFromDB,
   getMyBookingDetailsDataFromDB,
@@ -137,4 +229,7 @@ export const AppApiBookingService = {
   getRecentActivityFromDB,
   getDriverOverviewDataFromDB,
   getUserOnGoingBookingTodayFromDB,
+  getDriverCurrentBookingFromDB,
+  getDriverNextTripFromDB,
+  getAllDriverTripsListFromDB,
 };
