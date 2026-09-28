@@ -35,7 +35,7 @@ const createUserToDB = async (payload: Partial<IUser>): Promise<IUser> => {
     type: "create_account",
   };
 
-  //save to DB
+  //save to redis
   await emailQueue.add("send-email", emailData);
   // store otp to redis
   await redisService.post({

@@ -122,6 +122,25 @@ const getAllDriverTripsList = catchAsync(async (req: Request, res: Response) => 
   });
 });
 
+const getUserTotalTripDetails = catchAsync(async (req: Request, res: Response) => {
+  const data = await AppApiBookingService.getUserTotalTripDetailsFromDB(req.user);
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "User total trip details fetched successfully",
+    data: data,
+  });
+});
+
+const driverOverViewData = catchAsync(async (req: Request, res: Response) => {
+  const data = await AppApiBookingService.driverOverViewDataFromDB(req.user);
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Driver overview data fetched successfully",
+    data: data,
+  });
+});
 export const AppApiBookingController = {
   getMyBookingsOnGoingData,
   getMyBookingDetailsData,
@@ -132,4 +151,6 @@ export const AppApiBookingController = {
   getDriverCurrentBooking,
   getDriverNextTrip,
   getAllDriverTripsList,
+  getUserTotalTripDetails,
+  driverOverViewData,
 };

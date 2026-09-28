@@ -27,8 +27,11 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
     if (payload.driverId) {
       await sendNotifications({
         receiver: payload.driverId,
-        message: "New booking created",
-        data: payload,
+        sender: user.id,
+        text: "New booking created",
+        referenceId: Math.random().toString(36).substring(2, 15),
+        screen: "booking",
+        type: "user",
       });
     }
   } else {
@@ -104,10 +107,7 @@ const getAllMyBookingsFromDB = async (
   const qb = new QueryBuilder(
     // need to check user or driver id
     Booking.find({
-      $or: [
-        { userId: new Types.ObjectId(user.id) },
-        { driverId: new Types.ObjectId(user.id) },
-      ],
+      driverId: new Types.ObjectId(user.id),
     }),
     query,
   )
@@ -170,7 +170,10 @@ const getAllApprovedBookingsFromDB = async (
   user: JwtPayload,
   query: Record<string, any>,
 ) => {
-  const qb = new QueryBuilder(Booking.find({ isApproved: "approved" }), query)
+  const qb = new QueryBuilder(
+    Booking.find({ bookingStatus: "assigned", isApproved: "approved" }),
+    query,
+  )
     .filter()
     .sort()
     .search(["bookingStatus", "tripReason", "tripNote"])

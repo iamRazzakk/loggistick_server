@@ -15,6 +15,8 @@ const WEEKDAYS = [
 const TRIP_TYPES = ["one-way", "round-trip"] as const;
 const BOOKING_STATUSES = [
   "pending",
+  "assigned",
+  "in-progress",
   "confirmed",
   "cancelled",
   "completed",

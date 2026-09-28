@@ -8,10 +8,8 @@ import { getPriceFieldsToUnset } from "./counties.sanitizeByPriceMethod.utils";
 import { types } from "node:util";
 import redisClient from "../../../../config/redis.config";
 
-const COUNTIES_CACHE_KEY = "counties";
-const COUNTIES_ADMIN_CACHE_KEY = "counties-for-admin";
-
 const createCountiesIntoDB = async (payload: ICounty) => {
+  console.log("====>>createCountiesIntoDB", payload);
   const payer = await Payers.findById(payload.payersId).lean();
   if (!payer) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Payer not found");
@@ -23,23 +21,23 @@ const createCountiesIntoDB = async (payload: ICounty) => {
   }
 
   await redisService.post({
-    key: COUNTIES_CACHE_KEY,
+    key: `counties:${result._id}`,
     value: JSON.stringify(result),
     expiration: 24 * 60 * 60,
   });
+  console.log("====>>createCountiesIntoDB result", result);
 
   return result;
 };
 
 const getAllCountiesFromDB = async (payersId?: string) => {
-  const cacheKey = payersId
-    ? `${COUNTIES_CACHE_KEY}:${payersId}`
-    : COUNTIES_CACHE_KEY;
-
+  const cacheKey = payersId ? `counties:${payersId}` : `counties`;
   const cachedCounties = await redisService.get(cacheKey);
   if (cachedCounties) {
+    console.log("====>>From catch");
     return JSON.parse(cachedCounties);
   }
+  console.log("=====>>>>catch miss");
 
   const filter: Record<string, unknown> = { isActive: true };
   if (payersId) {
@@ -61,8 +59,14 @@ const getAllCountiesFromDB = async (payersId?: string) => {
 };
 
 const getAllCountiesForAdmin = async (id: string) => {
-  const cacheKey = `${COUNTIES_ADMIN_CACHE_KEY}:${id}`;
+  const result = await County.find({ payersId: id })
+    .populate("payersId", "name type isActive")
+    .lean();
+  return result;
+};
 
+const getSingleCountyFromDB = async (id: string) => {
+  const cacheKey = `counties:${id}`;
   const cachedCounties = await redisService.get(cacheKey);
   if (cachedCounties) {
     console.log("====>>From catch");
@@ -70,9 +74,13 @@ const getAllCountiesForAdmin = async (id: string) => {
   }
   console.log("=====>>>>catch miss");
 
-  const result = await County.find({ payersId: id })
+  const result = await County.findById(id)
     .populate("payersId", "name type isActive")
     .lean();
+
+  if (!result) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "County not found");
+  }
 
   await redisService.post({
     key: cacheKey,
@@ -83,19 +91,10 @@ const getAllCountiesForAdmin = async (id: string) => {
   return result;
 };
 
-const getSingleCountyFromDB = async (id: string) => {
-  const result = await County.findById(id)
-    .populate("payersId", "name type isActive")
-    .lean();
-
-  if (!result) {
-    throw new ApiError(StatusCodes.NOT_FOUND, "County not found");
-  }
-
-  return result;
-};
-
 const updateCountiesFromDB = async (id: string, payload: Partial<ICounty>) => {
+  const cacheKey = `counties:${id}`;
+  await redisService.del(cacheKey);
+
   if (payload.payersId) {
     const payer = await Payers.findById(payload.payersId).lean();
     if (!payer) {
@@ -119,11 +118,14 @@ const updateCountiesFromDB = async (id: string, payload: Partial<ICounty>) => {
     throw new ApiError(StatusCodes.NOT_FOUND, "County not found");
   }
 
-  await redisService.del(COUNTIES_ADMIN_CACHE_KEY);
+  await redisService.del(cacheKey);
   return result;
 };
 
 const deleteCountiesFromDB = async (id: string) => {
+  const cacheKey = `counties:${id}`;
+  await redisService.del(cacheKey);
+
   const result = await County.findByIdAndUpdate(
     id,
     { isActive: false },
@@ -134,7 +136,7 @@ const deleteCountiesFromDB = async (id: string) => {
     throw new ApiError(StatusCodes.NOT_FOUND, "County not found");
   }
 
-  await redisService.del(COUNTIES_CACHE_KEY);
+  await redisService.del(cacheKey);
   return result;
 };
 
@@ -163,11 +165,24 @@ const findCountyByLocationFromDB = async (lng: number, lat: number) => {
   return result;
 };
 
-const updateCountiesAdminFromDB = async (id: string, payload: Partial<ICounty>) => {
+const updateCountiesAdminFromDB = async (
+  id: string,
+  payload: Partial<ICounty>,
+) => {
+  const cacheKey = `counties:${id}`;
+  await redisService.del(cacheKey);
+
   const result = await County.findByIdAndUpdate(id, payload, {
     new: true,
     runValidators: true,
   });
+
+  await redisService.post({
+    key: cacheKey,
+    value: JSON.stringify(result),
+    expiration: 24 * 60 * 60,
+  });
+
   return result;
 };
 
@@ -179,5 +194,5 @@ export const CountiesService = {
   deleteCountiesFromDB,
   findCountyByLocationFromDB,
   getAllCountiesForAdmin,
-  updateCountiesAdminFromDB
+  updateCountiesAdminFromDB,
 };

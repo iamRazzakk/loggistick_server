@@ -107,9 +107,8 @@ const getUserOnGoingBookingTodayFromDB = async (user: JwtPayload) => {
     })
     .lean();
 
-  if (!booking) return { driverRating: 0, totalTripCompleted: 0 };
-
-  const driverId = (booking.driverId as { _id?: Types.ObjectId } | null)?._id;
+  if (!booking) return [];
+  const driverId = (booking?.driverId as { _id?: Types.ObjectId } | null)?._id;
   if (!driverId) {
     return { ...booking, driverRating: 0, totalTripCompleted: 0 };
   }
@@ -141,39 +140,51 @@ const getUserOnGoingBookingTodayFromDB = async (user: JwtPayload) => {
 const getDriverCurrentBookingFromDB = async (user: JwtPayload) => {
   const now = new Date();
   const today = format(now, "yyyy-MM-dd");
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const bookings = await Booking.find({
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+  const todaysBookings = await Booking.find({
     driverId: new Types.ObjectId(user.id),
     serviceDate: today,
     bookingStatus: { $ne: "cancelled" },
   })
     .populate({
       path: "userId",
-      select: "firstName lastName middleName profile",
+      select: "firstName lastName middleName profile contact",
     })
     .lean();
-  const withTime = bookings
-    .map((booking) => ({
-      booking,
-      minutes: toMinutes(booking.pickupTime),
-    }))
-    .filter((row) => row.minutes !== null) as {
-    booking: (typeof bookings)[number];
-    minutes: number;
-  }[];
-  const unfinishedBeforeNow = withTime
-    .filter(
-      (row) =>
-        row.minutes <= nowMinutes && row.booking.bookingStatus !== "completed",
-    )
-    .sort((a, b) => a.minutes - b.minutes);
-  if (unfinishedBeforeNow.length > 0) {
-    return unfinishedBeforeNow[0].booking;
-  }
-  const nextTrip = withTime
-    .filter((row) => row.minutes > nowMinutes)
-    .sort((a, b) => a.minutes - b.minutes);
-  return nextTrip[0]?.booking ?? [];
+
+  const bookingsByPickup = todaysBookings
+    .flatMap((booking) => {
+      const pickupMinutes = toMinutes(booking.pickupTime);
+      return pickupMinutes === null ? [] : [{ booking, pickupMinutes }];
+    })
+    .sort((a, b) => a.pickupMinutes - b.pickupMinutes);
+
+  const activeOverdueBooking = bookingsByPickup.find(
+    (item) =>
+      item.pickupMinutes <= currentMinutes &&
+      item.booking.bookingStatus !== "completed",
+  );
+
+  const upcomingBooking = bookingsByPickup.find(
+    (item) => item.pickupMinutes > currentMinutes,
+  );
+
+  const currentBooking =
+    activeOverdueBooking?.booking ?? upcomingBooking?.booking;
+
+  if (!currentBooking) return [];
+
+  const passenger = currentBooking.userId as { _id?: Types.ObjectId } | null;
+
+  const completedTripCount = passenger
+    ? await Booking.countDocuments({
+        userId: passenger._id,
+        bookingStatus: "completed",
+      })
+    : 0;
+
+  return { ...currentBooking, completedTrips: completedTripCount };
 };
 
 // next 3 trips
@@ -194,7 +205,7 @@ const getDriverNextTripFromDB = async (user: JwtPayload) => {
   })
     .populate({
       path: "userId",
-      select: "firstName lastName middleName profile",
+      select: "firstName lastName middleName profile contact",
     })
     .lean();
 
@@ -215,11 +226,50 @@ const getAllDriverTripsListFromDB = async (user: JwtPayload) => {
   })
     .populate({
       path: "userId",
-      select: "firstName lastName middleName profile",
+      select: "firstName lastName middleName profile contact",
     })
     .sort({ createdAt: -1 })
     .lean();
   return bookings ?? [];
+};
+
+// total Trip, completed trip, total paid
+
+const getUserTotalTripDetailsFromDB = async (user: JwtPayload) => {
+  const totalTrips = await Booking.countDocuments({
+    userId: new Types.ObjectId(user.id),
+  }).lean();
+  const totalCompletedTrips = await Booking.countDocuments({
+    userId: new Types.ObjectId(user.id),
+    bookingStatus: "completed",
+  }).lean();
+  // count total price of the trips
+  const totalPaid = await Booking.find({
+    userId: new Types.ObjectId(user.id),
+    bookingStatus: "completed",
+  })
+    .select("price")
+    .lean();
+  const totalPaidAmount =
+    totalPaid?.reduce((sum, row) => sum + (row.price ?? 0), 0) ?? 0;
+  return { totalTrips, totalCompletedTrips, totalPaidAmount };
+};
+// overview data
+const driverOverViewDataFromDB = async (user: JwtPayload) => {
+  const [todayTotalTrips, totalTodayCompleteTrips] = await Promise.all([
+    Booking.countDocuments({
+      driverId: new Types.ObjectId(user.id),
+      serviceDate: format(new Date(), "yyyy-MM-dd"),
+    }).lean(),
+    Booking.countDocuments({
+      driverId: new Types.ObjectId(user.id),
+      serviceDate: format(new Date(), "yyyy-MM-dd"),
+      bookingStatus: "completed",
+    }).lean(),
+  ]);
+
+  const totalRemainingTrips = todayTotalTrips - totalTodayCompleteTrips;
+  return { todayTotalTrips, totalTodayCompleteTrips, totalRemainingTrips };
 };
 
 export const AppApiBookingService = {
@@ -232,4 +282,6 @@ export const AppApiBookingService = {
   getDriverCurrentBookingFromDB,
   getDriverNextTripFromDB,
   getAllDriverTripsListFromDB,
+  getUserTotalTripDetailsFromDB,
+  driverOverViewDataFromDB,
 };

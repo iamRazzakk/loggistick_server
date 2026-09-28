@@ -39,6 +39,13 @@ router
     AppApiBookingController.getDriverCurrentBooking,
   );
 
+router
+  .route("/overview-data")
+  .get(
+    auth(USER_ROLES.DRIVER, USER_ROLES.SUPER_ADMIN),
+    AppApiBookingController.driverOverViewData,
+  );
+
 // driver next trip
 router
   .route("/next-trip")
@@ -55,7 +62,10 @@ router
     auth(USER_ROLES.USER),
     AppApiBookingController.getUserOnGoingBookingToday,
   );
-
+// user total trip details
+router
+  .route("/user/profile")
+  .get(auth(USER_ROLES.USER), AppApiBookingController.getUserTotalTripDetails);
 router
   .route("/:id")
   .get(
