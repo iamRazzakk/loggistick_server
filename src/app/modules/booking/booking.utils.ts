@@ -55,23 +55,23 @@ const sameCounty = (
 ) => Boolean(a?._id && b?._id && String(a._id) === String(b._id));
 
 const priceByMethod = (county: ICounty, miles: number) => {
-  if (county.priceMethod === "flat_rate") {
-    return county.flat_rate_price ?? 0;
+  if (county?.priceMethod === "flat_rate") {
+    return county?.flat_rate_price ?? 0;
   }
 
-  if (county.priceMethod === "per_mile") {
-    const startingFare = county.starting_fare ?? 0;
-    const firstMilesPrice = county.first_miles_price ?? 0;
-    const perMile = county.per_mile_price ?? 0;
+  if (county?.priceMethod === "per_mile") {
+    const startingFare = county?.starting_fare ?? 0;
+    const firstMilesPrice = county?.first_miles_price ?? 0;
+    const perMile = county?.per_mile_price ?? 0;
     if (miles <= 0) return startingFare;
     const extraMiles = Math.max(0, miles - 1);
     return startingFare + firstMilesPrice + extraMiles * perMile;
   }
 
-  const band = county.mileage_based_price;
+  const band = county?.mileage_based_price;
   if (!band) return 0;
-  const extraMiles = Math.max(0, miles - band.starting_mileage);
-  return band.first_miles_price + extraMiles * band.per_mile_price;
+  const extraMiles = Math.max(0, miles - band?.starting_mileage);
+  return band?.first_miles_price + extraMiles * band?.per_mile_price;
 };
 
 export const getTripPrice = async (input: {
@@ -96,12 +96,12 @@ export const getTripPrice = async (input: {
   }
 
   const pickupCounty = await findCountyForPoint(input.pickup, input.payerId);
-  if (!pickupCounty) {
-    throw new ApiError(
-      StatusCodes.BAD_REQUEST,
-      "Pickup is outside every active county for this payer.",
-    );
-  }
+  // if (!pickupCounty) {
+  //   throw new ApiError(
+  //     StatusCodes.BAD_REQUEST,
+  //     "Pickup is outside every active county for this payer.",
+  //   );
+  // }
 
   const dropoffCounty = await findCountyForPoint(input.dropoff, input.payerId);
   const stopCounty = input.stop
@@ -113,11 +113,11 @@ export const getTripPrice = async (input: {
     (!input.stop || sameCounty(pickupCounty, stopCounty));
 
   const zoneFee = fullyInside
-    ? (pickupCounty.insidePrice ?? 0)
-    : (pickupCounty.outsidePrice ?? 0);
+    ? (pickupCounty?.insidePrice ?? 0)
+    : (pickupCounty?.outsidePrice ?? 0);
 
   const miles = tripMiles(input.pickup, input.dropoff, input.stop);
-  const base = priceByMethod(pickupCounty, miles);
+  const base = priceByMethod(pickupCounty!, miles);
 
   let mobilityPrice = 0;
   if (input.mobilityRequirements) {
@@ -136,12 +136,11 @@ export const getTripPrice = async (input: {
     totalPrice: Number(total.toFixed(2)),
     milesPrice: Number(miles.toFixed(2)),
     mobilityTotalPrice: Number(mobilityPrice.toFixed(2)),
-    priceMethod: pickupCounty.priceMethod,
-    countyId: pickupCounty._id,
+    priceMethod: pickupCounty?.priceMethod!,
+    countyId: pickupCounty?._id!,
     zone: fullyInside ? "inside" : "outside",
   };
 };
-
 
 export const toBookingErrorMessage = (error: unknown) => {
   const message =

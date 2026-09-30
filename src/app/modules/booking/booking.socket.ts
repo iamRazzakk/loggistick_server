@@ -39,7 +39,6 @@ const findBookingMember = async (userId: string, bookingId: string) => {
   return null;
 };
 
-
 export const registerBookingLocationSocket = (_io: Server, socket: Socket) => {
   socket.on("booking:join", async (payload, ack: Ack) => {
     try {

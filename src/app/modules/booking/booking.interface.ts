@@ -75,6 +75,7 @@ export type IBooking = {
   recurringBatchId?: string;
   price?: number;
   isApproved?: "pending" | "approved" | "rejected";
+  cancelledBy?: Types.ObjectId;
 };
 
 export type BookingModel = Model<IBooking>;

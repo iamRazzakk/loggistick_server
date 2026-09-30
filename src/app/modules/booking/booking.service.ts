@@ -224,7 +224,15 @@ const getTripHistoryFromDB = async (
 };
 
 // update booking
-const updateBookingInDB = async (id: string, payload: IBooking) => {
+const updateBookingInDB = async (
+  id: string,
+  payload: IBooking,
+  user: JwtPayload,
+) => {
+  if (payload.bookingStatus === "cancelled") {
+    payload.cancelledBy = new Types.ObjectId(user.id);
+  }
+  // TODO:: if booking status is completed than need to redirect the payment stripe.
   const booking = await Booking.findByIdAndUpdate(id, payload, { new: true });
   if (!booking) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");

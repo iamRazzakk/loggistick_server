@@ -31,6 +31,12 @@ const getMyBookingsOnGoingDataFromDB = async (
     userId: user.id,
     ...(query.bookingStatus ? { bookingStatus: query.bookingStatus } : {}),
   }).lean();
+
+  const userId = String(user.id);
+  for (const booking of bookings) {
+    (booking as any).isCancelledByYou =
+      booking?.cancelledBy != null && String(booking?.cancelledBy) === userId;
+  }
   return bookings;
 };
 

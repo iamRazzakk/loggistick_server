@@ -141,6 +141,11 @@ const bookingSchema = new Schema<IBooking, BookingModel>(
       enum: ["pending", "approved", "rejected"],
       required: false,
     },
+    cancelledBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: false,
+    },
   },
   {
     timestamps: true,
