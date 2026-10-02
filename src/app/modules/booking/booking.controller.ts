@@ -37,6 +37,7 @@ const getAllBookings = catchAsync(async (req: Request, res: Response) => {
     statusCode: StatusCodes.OK,
     success: true,
     message: "Bookings fetched successfully",
+    // @ts-ignore
     pagination: bookings.meta,
     data: bookings.data,
   });

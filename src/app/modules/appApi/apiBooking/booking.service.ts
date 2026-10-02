@@ -46,6 +46,7 @@ const getMyBookingDetailsDataFromDB = async (user: JwtPayload, id: string) => {
       path: "mobilityRequirements",
       select: "name",
     })
+
     .lean();
   if (!booking) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");

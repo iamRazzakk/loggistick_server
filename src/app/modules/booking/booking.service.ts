@@ -17,6 +17,7 @@ import { User } from "../user/user.model";
 import { USER_ROLES } from "../../../enums/user";
 import { getTripPrice, toBookingErrorMessage } from "./booking.utils";
 import { sendNotifications } from "../../../helpers/notificationsHelper";
+import stripe from "../../../config/stripe";
 
 const JOB_WAIT_MS = 120_000;
 
@@ -121,7 +122,7 @@ const getAllMyBookingsFromDB = async (
     .paginate();
 
   const [data, meta] = await Promise.all([
-    qb.modelQuery.exec(),
+    qb.modelQuery.lean().exec(),
     qb.getPaginationInfo(),
   ]);
 
@@ -130,39 +131,38 @@ const getAllMyBookingsFromDB = async (
 
 // all pending bookings
 const getAllBookingsFromDB = async (
-  user: JwtPayload,
+  _user: JwtPayload,
   query: Record<string, any>,
 ) => {
+  const safeQuery = {
+    ...query,
+    limit: Math.min(Math.max(Number(query.limit) || 10, 1), 50),
+    page: Math.max(Number(query.page) || 1, 1),
+  };
   const qb = new QueryBuilder(
-    Booking.find({
-      isApproved: "pending",
-    }),
-    query,
+    Booking.find({ isApproved: "pending" }).select(
+      "userId driverId mobilityRequirements payerSource bookingStatus isApproved tripType tripReason serviceDate appointmentTime pickupTime returnTime passengerSeats price pickupLocation dropOffLocation stopAddress recurringBooking createdAt",
+    ),
+    safeQuery,
   )
     .filter()
     .sort()
-    .search([
-      "userId.firstName",
-      "userId.lastName",
-      "userId.middleName",
-      "driverId.firstName",
-      "driverId.lastName",
-      "driverId.middleName",
-      "bookingStatus",
-      "isApproved",
-    ])
-    .filter()
-    .search(["payerSource"])
+    .search(["bookingStatus", "tripReason", "isApproved"])
     .paginate()
     .populate(["userId", "driverId", "mobilityRequirements", "payerSource"], {
       userId: "firstName lastName middleName profile",
       driverId: "firstName lastName middleName profile contact",
+      mobilityRequirements: "name price icon",
+      payerSource: "name type",
     });
-  const [data, meta] = await Promise.all([
-    qb.modelQuery.exec(),
-    qb.getPaginationInfo(),
-  ]);
-  return { data, meta };
+  const data = await qb.modelQuery.lean().exec();
+  return {
+    data,
+    meta: {
+      page: safeQuery.page,
+      limit: safeQuery.limit,
+    },
+  };
 };
 
 // all approved bookings
@@ -181,7 +181,7 @@ const getAllApprovedBookingsFromDB = async (
       userId: "firstName lastName middleName profile",
     });
   const [data, meta] = await Promise.all([
-    qb.modelQuery.exec(),
+    qb.modelQuery.lean().exec(),
     qb.getPaginationInfo(),
   ]);
   return { data, meta };
@@ -192,7 +192,6 @@ const getTripHistoryFromDB = async (
   user: JwtPayload,
   query: Record<string, any>,
 ) => {
-  const today = format(new Date(), "yyyy-MM-dd");
   const { serviceDate: _ignored, ...restQuery } = query;
   if (!restQuery.sort) {
     restQuery.sort = "-serviceDate";
@@ -217,7 +216,7 @@ const getTripHistoryFromDB = async (
     .paginate();
 
   const [data, meta] = await Promise.all([
-    qb.modelQuery.exec(),
+    qb.modelQuery.lean().exec(),
     qb.getPaginationInfo(),
   ]);
   return { data, meta };
@@ -232,7 +231,57 @@ const updateBookingInDB = async (
   if (payload.bookingStatus === "cancelled") {
     payload.cancelledBy = new Types.ObjectId(user.id);
   }
-  // TODO:: if booking status is completed than need to redirect the payment stripe.
+  if (payload.bookingStatus === "completed") {
+    const existing = await Booking.findById(id)
+      .lean()
+      .select("price userId bookingStatus");
+
+    if (!existing) {
+      throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
+    }
+    if (existing.bookingStatus === "completed") {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "Booking is already completed",
+      );
+    }
+
+    const amount = existing.price ?? 0;
+    if (amount <= 0) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, "Booking price is missing");
+    }
+
+    const rider = await User.findById(existing.userId).lean().select("email");
+    if (!rider?.email) {
+      throw new ApiError(StatusCodes.NOT_FOUND, "Rider email not found");
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      customer_email: rider.email,
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: "usd",
+            unit_amount: Math.round(amount * 100),
+            product_data: { name: `Booking ${id}` },
+          },
+        },
+      ],
+      metadata: { bookingId: id },
+      success_url: `${process.env.STRIPE_PAYMENT_SUCCESS_URL}?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.STRIPE_PAYMENT_CANCEL_URL}`,
+    });
+
+    const { bookingStatus: _status, ...rest } = payload;
+    const booking = await Booking.findByIdAndUpdate(id, rest, { new: true });
+    if (!booking) {
+      throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
+    }
+
+    return { booking, checkoutUrl: session.url };
+  }
   const booking = await Booking.findByIdAndUpdate(id, payload, { new: true });
   if (!booking) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
