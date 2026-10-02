@@ -19,6 +19,7 @@ const BOOKING_STATUSES = [
   "in-progress",
   "confirmed",
   "cancelled",
+  "trip-completed",
   "completed",
 ] as const;
 const APPOINTMENT_TYPES = Object.values(AppointmentType) as [

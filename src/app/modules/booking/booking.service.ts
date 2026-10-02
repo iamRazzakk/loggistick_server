@@ -189,7 +189,7 @@ const getAllApprovedBookingsFromDB = async (
 
 // trip history
 const getTripHistoryFromDB = async (
-  user: JwtPayload,
+  _user: JwtPayload,
   query: Record<string, any>,
 ) => {
   const { serviceDate: _ignored, ...restQuery } = query;

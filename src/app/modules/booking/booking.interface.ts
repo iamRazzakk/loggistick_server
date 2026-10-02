@@ -71,6 +71,7 @@ export type IBooking = {
     | "in-progress"
     | "confirmed"
     | "cancelled"
+    | "trip-completed"
     | "completed";
   recurringBatchId?: string;
   price?: number;

@@ -120,6 +120,7 @@ const bookingSchema = new Schema<IBooking, BookingModel>(
         "in-progress",
         "confirmed",
         "cancelled",
+        "trip-completed",
         "completed",
       ],
       required: true,
