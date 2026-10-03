@@ -23,16 +23,42 @@ const assertCanViewBooking = (
   }
 };
 
+const STORED_BOOKING_STATUSES = [
+  "pending",
+  "assigned",
+  "in-progress",
+  "confirmed",
+  "cancelled",
+  "trip-completed",
+  "completed",
+] as const;
+
+const CLOSED_BOOKING_STATUSES = ["cancelled", "completed", "trip-completed"];
+
 const getMyBookingsOnGoingDataFromDB = async (
   user: JwtPayload,
   query: Record<string, unknown>,
 ) => {
-  const bookings = await Booking.find({
-    userId: user.id,
-    ...(query.bookingStatus ? { bookingStatus: query.bookingStatus } : {}),
-  }).lean();
+  const bookingStatus = query.bookingStatus;
+  const filter: Record<string, unknown> = { userId: user.id };
 
+  if (bookingStatus != null && bookingStatus !== "") {
+    if (bookingStatus === "pending") {
+      filter.serviceDate = { $gte: format(new Date(), "yyyy-MM-dd") };
+      filter.bookingStatus = { $nin: CLOSED_BOOKING_STATUSES };
+    } else if (
+      typeof bookingStatus === "string" &&
+      (STORED_BOOKING_STATUSES as readonly string[]).includes(bookingStatus)
+    ) {
+      filter.bookingStatus = bookingStatus;
+    } else {
+      throw new ApiError(StatusCodes.BAD_REQUEST, "Invalid booking status");
+    }
+  }
+
+  const bookings = await Booking.find(filter).lean();
   const userId = String(user.id);
+  // need to call this 
   for (const booking of bookings) {
     (booking as any).isCancelledByYou =
       booking?.cancelledBy != null && String(booking?.cancelledBy) === userId;

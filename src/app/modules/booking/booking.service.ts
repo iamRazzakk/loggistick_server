@@ -46,6 +46,18 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
 
   payload.bookingStatus = "pending";
 
+  const quote = await getTripPrice({
+    pickup: payload.pickupLocation as [number, number],
+    dropoff: payload.dropOffLocation as [number, number],
+    stop: payload.stopAddress?.length
+      ? (payload.stopAddress as [number, number])
+      : undefined,
+    payerId: payload.payerSource?.toString(),
+    tripType: payload.tripType,
+    mobilityRequirements: payload.mobilityRequirements?.toString(),
+  });
+  payload.price = quote.totalPrice;
+
   if (!payload.recurringBooking) {
     return await Booking.create(payload);
   }
