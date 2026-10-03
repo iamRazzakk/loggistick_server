@@ -161,4 +161,5 @@ bookingSchema.index({ bookingStatus: 1 });
 bookingSchema.index({ driverId: 1, serviceDate: 1 });
 bookingSchema.index({ userId: 1, serviceDate: 1 });
 bookingSchema.index({ bookingStatus: 1, serviceDate: 1 });
+bookingSchema.index({ userId: 1, bookingStatus: 1, serviceDate: 1 });
 export const Booking = model<IBooking, BookingModel>("Booking", bookingSchema);

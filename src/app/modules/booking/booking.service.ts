@@ -18,6 +18,7 @@ import { USER_ROLES } from "../../../enums/user";
 import { getTripPrice, toBookingErrorMessage } from "./booking.utils";
 import { sendNotifications } from "../../../helpers/notificationsHelper";
 import stripe from "../../../config/stripe";
+import { Driverrating } from "../driverrating/driverrating.model";
 
 const JOB_WAIT_MS = 120_000;
 
@@ -303,11 +304,45 @@ const updateBookingInDB = async (
 
 // get booking by id
 const getBookingByIdFromDB = async (id: string) => {
-  const booking = await Booking.findById(id);
-  if (!booking) {
-    throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
+  const booking = await Booking.findById(id)
+    .populate({
+      path: "driverId",
+      select: "firstName lastName middleName profile contact",
+    })
+    .lean();
+
+  if (!booking) return [];
+
+  const driver = booking.driverId as {
+    _id?: Types.ObjectId;
+    firstName?: string;
+    lastName?: string;
+    middleName?: string;
+    profile?: string;
+    contact?: string;
+  } | null;
+
+  if (!driver?._id) {
+    return { ...booking, driverRating: 0, totalTripCompleted: 0 };
   }
-  return booking;
+
+  const [ratings, totalTripCompleted] = await Promise.all([
+    Driverrating.find({ driverId: driver._id }).select("rating").lean(),
+    Booking.countDocuments({ driverId: driver._id }),
+  ]);
+
+  const driverRating = ratings.length
+    ? ratings.reduce((sum, row) => sum + row.rating, 0) / ratings.length
+    : 0;
+
+  return {
+    ...booking,
+    driverId: {
+      ...driver,
+      driverRating,
+      totalTripCompleted,
+    },
+  };
 };
 
 // scheduled bookings

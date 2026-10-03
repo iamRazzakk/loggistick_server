@@ -24,6 +24,7 @@ import { ChatRoutes } from "../modules/chat/chat.routes";
 import { MessageRoutes } from "../modules/message/message.routes";
 import { BankcardRoutes } from "../modules/bankcard/bankcard.route";
 import { NotificationRoutes } from "../modules/notification/notification.routes";
+import { EmergencyContactRoutes } from "../modules/emergency_contact/emergency_contact.route";
 
 const router = express.Router();
 
@@ -53,6 +54,7 @@ const apiRoutes = [
   { path: "/chat", route: ChatRoutes },
   { path: "/message", route: MessageRoutes },
   { path: "/bankcard", route: BankcardRoutes },
+  { path: "/emergency-contact", route: EmergencyContactRoutes },
 ];
 
 apiRoutes.forEach((route) => router.use(route.path, route.route));

@@ -110,27 +110,33 @@ const getDriverNextTrip = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getAllDriverTripsList = catchAsync(
+  async (req: Request, res: Response) => {
+    const bookings = await AppApiBookingService.getAllDriverTripsListFromDB(
+      req.user,
+    );
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: "All driver trips list fetched successfully",
+      data: bookings,
+    });
+  },
+);
 
-
-const getAllDriverTripsList = catchAsync(async (req: Request, res: Response) => {
-  const bookings = await AppApiBookingService.getAllDriverTripsListFromDB(req.user);
-  sendResponse(res, {
-    success: true,
-    statusCode: StatusCodes.OK,
-    message: "All driver trips list fetched successfully",
-    data: bookings,
-  });
-});
-
-const getUserTotalTripDetails = catchAsync(async (req: Request, res: Response) => {
-  const data = await AppApiBookingService.getUserTotalTripDetailsFromDB(req.user);
-  sendResponse(res, {
-    success: true,
-    statusCode: StatusCodes.OK,
-    message: "User total trip details fetched successfully",
-    data: data,
-  });
-});
+const getUserTotalTripDetails = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await AppApiBookingService.getUserTotalTripDetailsFromDB(
+      req.user,
+    );
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: "User total trip details fetched successfully",
+      data: data,
+    });
+  },
+);
 
 const driverOverViewData = catchAsync(async (req: Request, res: Response) => {
   const data = await AppApiBookingService.driverOverViewDataFromDB(req.user);

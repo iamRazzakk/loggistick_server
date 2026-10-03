@@ -7,6 +7,10 @@ import { Types } from "mongoose";
 import { addDays, format } from "date-fns";
 import { Driverrating } from "../../driverrating/driverrating.model";
 import toMinutes from "./booking.helper";
+import {
+  CLOSED_BOOKING_STATUSES,
+  STORED_BOOKING_STATUSES,
+} from "./booking.contant";
 
 const assertCanViewBooking = (
   user: JwtPayload,
@@ -23,29 +27,24 @@ const assertCanViewBooking = (
   }
 };
 
-const STORED_BOOKING_STATUSES = [
-  "pending",
-  "assigned",
-  "in-progress",
-  "confirmed",
-  "cancelled",
-  "trip-completed",
-  "completed",
-] as const;
-
-const CLOSED_BOOKING_STATUSES = ["cancelled", "completed", "trip-completed"];
-
 const getMyBookingsOnGoingDataFromDB = async (
   user: JwtPayload,
   query: Record<string, unknown>,
 ) => {
   const bookingStatus = query.bookingStatus;
-  const filter: Record<string, unknown> = { userId: user.id };
+  const filter: Record<string, unknown> = {
+    $or: [{ userId: user.id }, { driverId: user.id }],
+  };
 
   if (bookingStatus != null && bookingStatus !== "") {
     if (bookingStatus === "pending") {
       filter.serviceDate = { $gte: format(new Date(), "yyyy-MM-dd") };
-      filter.bookingStatus = { $nin: CLOSED_BOOKING_STATUSES };
+      filter.bookingStatus = {
+        $in: STORED_BOOKING_STATUSES.filter(
+          (status) =>
+            !(CLOSED_BOOKING_STATUSES as readonly string[]).includes(status),
+        ),
+      };
     } else if (
       typeof bookingStatus === "string" &&
       (STORED_BOOKING_STATUSES as readonly string[]).includes(bookingStatus)
@@ -55,13 +54,11 @@ const getMyBookingsOnGoingDataFromDB = async (
       throw new ApiError(StatusCodes.BAD_REQUEST, "Invalid booking status");
     }
   }
-
   const bookings = await Booking.find(filter).lean();
-  const userId = String(user.id);
-  // need to call this 
   for (const booking of bookings) {
-    (booking as any).isCancelledByYou =
-      booking?.cancelledBy != null && String(booking?.cancelledBy) === userId;
+    const cancelledBy = booking?.cancelledBy as Types.ObjectId;
+    (booking as { isCancelledByYou?: boolean }).isCancelledByYou =
+      cancelledBy != null && cancelledBy.equals(user.id!);
   }
   return bookings;
 };

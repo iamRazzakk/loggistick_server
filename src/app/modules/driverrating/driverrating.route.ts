@@ -7,17 +7,23 @@ const router = express.Router();
 
 router
   .route("/")
-  .post(auth(USER_ROLES.SUPER_ADMIN), DriverratingController.createDriverRating)
+  .post(
+    auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.USER),
+    DriverratingController.createDriverRating,
+  )
   .get(
-    auth(USER_ROLES.SUPER_ADMIN),
+    auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.USER),
     DriverratingController.getAllDriverRatings,
   );
 
 router
   .route("/:id")
   .get(
-    auth(USER_ROLES.SUPER_ADMIN),
+    auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.USER),
     DriverratingController.getSingleDriverRating,
   )
-  .put(auth(USER_ROLES.SUPER_ADMIN), DriverratingController.updateDriverRating);
+  .patch(
+    auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.USER),
+    DriverratingController.updateDriverRating,
+  );
 export const DriverratingRoutes = router;
