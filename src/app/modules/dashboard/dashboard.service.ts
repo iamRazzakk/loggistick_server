@@ -5,6 +5,7 @@ import { Booking } from "../booking/booking.model";
 import { User } from "../user/user.model";
 import { DASHBOARD_SEARCHABLE_FIELDS } from "./dashboard.constants";
 import { Vehicle } from "../vehicle/vehicle.model";
+import { Payment } from "../payment/payment.model";
 
 const dashboardOverviewFromDB = async () => {
   const today = format(new Date(), "yyyy-MM-dd");
@@ -103,16 +104,21 @@ const pendingTripsFromDB = async (query: Record<string, any>) => {
 // admin dashboard
 const getAdminDashboardOverviewFromDB = async () => {
   // total vehicles, total Driver, total Trip (This month), total Revenue
-  const [totalVehicles, totalDrivers, totalTrips] = await Promise.all([
-    Vehicle.countDocuments(),
-    User.countDocuments({ role: USER_ROLES.DRIVER }),
-    Booking.countDocuments({
-      serviceDate: {
-        $gte: new Date(new Date().setMonth(new Date().getMonth() - 1)),
-      },
-    }),
-  ]);
-  const totalRevenue = 0;
+  const [totalVehicles, totalDrivers, totalTrips, totalRevenue] =
+    await Promise.all([
+      Vehicle.countDocuments(),
+      User.countDocuments({ role: USER_ROLES.DRIVER }),
+      Booking.countDocuments({
+        serviceDate: {
+          $gte: new Date(new Date().setMonth(new Date().getMonth() - 1)),
+        },
+      }),
+
+      Payment.aggregate([
+        { $match: { paymentStatus: "paid" } },
+        { $group: { _id: null, totalRevenue: { $sum: "$price" } } },
+      ]).then((result) => result[0]?.totalRevenue ?? 0),
+    ]);
   return {
     totalVehicles,
     totalDrivers,

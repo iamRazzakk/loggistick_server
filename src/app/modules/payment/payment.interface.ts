@@ -6,6 +6,7 @@ export type IPayment = {
   price: number;
   paymentStatus: "pending" | "paid" | "failed";
   userId: Types.ObjectId;
+  txnNumber: string;
 };
 
 export type PaymentModel = Model<IPayment>;

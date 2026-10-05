@@ -41,7 +41,6 @@ const pendingTrips = catchAsync(
   },
 );
 
-
 const getAdminTripDistribution = catchAsync(
   async (_req: Request, res: Response, _next: NextFunction) => {
     const result = await DashboardServices.getAdminTripDistributionFromDB();
@@ -52,7 +51,7 @@ const getAdminTripDistribution = catchAsync(
       data: result,
     });
   },
-);  
+);
 
 const getAdminDashboardOverview = catchAsync(
   async (_req: Request, res: Response, _next: NextFunction) => {

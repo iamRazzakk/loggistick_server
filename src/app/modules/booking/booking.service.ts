@@ -258,6 +258,7 @@ const updateBookingInDB = async (
   const booking = await Booking.findByIdAndUpdate(id, payload, { new: true });
   if (!booking) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
+    
   }
   return booking;
 };

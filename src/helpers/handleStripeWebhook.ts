@@ -1,16 +1,8 @@
 import { Request, Response } from "express";
 import Stripe from "stripe";
 import colors from "colors";
-import {
-  handleAccountUpdatedEvent,
-  handleSubscriptionCreated,
-  handleSubscriptionDeleted,
-  handleSubscriptionUpdated,
-} from "../handlers";
-import { StatusCodes } from "http-status-codes";
 import { logger } from "../shared/logger";
 import config from "../config";
-import ApiError from "../errors/ApiErrors";
 import stripe from "../config/stripe";
 import { Booking } from "../app/modules/booking/booking.model";
 import { Payment } from "../app/modules/payment/payment.model";
@@ -26,18 +18,17 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
   try {
     event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret);
   } catch (error) {
-    throw new ApiError(
-      StatusCodes.BAD_REQUEST,
-      `Webhook signature verification failed. ${error}`,
+    logger.error(
+      colors.bgRed.bold(`Webhook signature verification failed. ${error}`),
     );
   }
 
   // Check if the event is valid
   if (!event) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, "Invalid event received!");
+    logger.error(colors.bgRed.bold("Invalid event received!"));
   }
 
-  const eventType = event.type;
+  const eventType = event?.type;
 
   try {
     switch (eventType) {
@@ -46,17 +37,22 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
         const session = event.data.object as Stripe.Checkout.Session;
         const bookingId = session.metadata?.bookingId;
         if (session.payment_status === "paid" && bookingId) {
-          const booking = await Booking.findByIdAndUpdate(bookingId, {
-            bookingStatus: "completed",
-            paymentStatus: "paid",
-          });
-          if (booking) {
-            await Payment.create({
-              bookingId: booking._id,
-              price: booking.price,
+          try {
+            const booking = await Booking.findByIdAndUpdate(bookingId, {
+              bookingStatus: "completed",
               paymentStatus: "paid",
-              userId: booking.userId,
             });
+            if (booking) {
+              await Payment.create({
+                bookingId: booking._id,
+                price: booking.price,
+                paymentStatus: "paid",
+                userId: booking.userId,
+                txnNumber: session?.payment_intent as string,
+              });
+            }
+          } catch (error) {
+            logger.error(colors.bgRed.bold(`Error updating booking: ${error}`));
           }
         }
         break;
@@ -77,10 +73,7 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
         logger.warn(colors.bgGreen.bold(`Unhandled event type: ${eventType}`));
     }
   } catch (error) {
-    throw new ApiError(
-      StatusCodes.INTERNAL_SERVER_ERROR,
-      `Error handling event: ${error}`,
-    );
+    logger.error(colors.bgRed.bold(`Error handling event: ${error}`));
   }
 
   res.sendStatus(200);
