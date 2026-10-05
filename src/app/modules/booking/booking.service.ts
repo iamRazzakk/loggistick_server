@@ -15,7 +15,11 @@ import {
 } from "../../../queue/booking.queue";
 import { User } from "../user/user.model";
 import { USER_ROLES } from "../../../enums/user";
-import { getTripPrice, toBookingErrorMessage } from "./booking.utils";
+import {
+  getTripPrice,
+  handlePayment,
+  toBookingErrorMessage,
+} from "./booking.utils";
 import { sendNotifications } from "../../../helpers/notificationsHelper";
 import stripe from "../../../config/stripe";
 import { Driverrating } from "../driverrating/driverrating.model";
@@ -244,56 +248,12 @@ const updateBookingInDB = async (
   if (payload.bookingStatus === "cancelled") {
     payload.cancelledBy = new Types.ObjectId(user.id);
   }
+  // for payment .....
   if (payload.bookingStatus === "completed") {
-    const existing = await Booking.findById(id)
-      .lean()
-      .select("price userId bookingStatus");
-
-    if (!existing) {
-      throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
-    }
-    if (existing.bookingStatus === "completed") {
-      throw new ApiError(
-        StatusCodes.BAD_REQUEST,
-        "Booking is already completed",
-      );
-    }
-
-    const amount = existing.price ?? 0;
-    if (amount <= 0) {
-      throw new ApiError(StatusCodes.BAD_REQUEST, "Booking price is missing");
-    }
-
-    const rider = await User.findById(existing.userId).lean().select("email");
-    if (!rider?.email) {
-      throw new ApiError(StatusCodes.NOT_FOUND, "Rider email not found");
-    }
-
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      customer_email: rider.email,
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: "usd",
-            unit_amount: Math.round(amount * 100),
-            product_data: { name: `Booking ${id}` },
-          },
-        },
-      ],
-      metadata: { bookingId: id },
-      success_url: `${process.env.STRIPE_PAYMENT_SUCCESS_URL}?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.STRIPE_PAYMENT_CANCEL_URL}`,
-    });
-
-    const { bookingStatus: _status, ...rest } = payload;
-    const booking = await Booking.findByIdAndUpdate(id, rest, { new: true });
-    if (!booking) {
-      throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
-    }
-
-    return { booking, checkoutUrl: session.url };
+    const payment = await handlePayment(id);
+    return {
+      checkoutUrl: payment.checkoutUrl,
+    };
   }
   const booking = await Booking.findByIdAndUpdate(id, payload, { new: true });
   if (!booking) {

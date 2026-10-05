@@ -13,6 +13,7 @@ import config from "../config";
 import ApiError from "../errors/ApiErrors";
 import stripe from "../config/stripe";
 import { Booking } from "../app/modules/booking/booking.model";
+import { Payment } from "../app/modules/payment/payment.model";
 
 const handleStripeWebhook = async (req: Request, res: Response) => {
   // Extract Stripe signature and webhook secret
@@ -40,12 +41,33 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
 
   try {
     switch (eventType) {
+      // checkout session success
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
         const bookingId = session.metadata?.bookingId;
         if (session.payment_status === "paid" && bookingId) {
-          await Booking.findByIdAndUpdate(bookingId, {
+          const booking = await Booking.findByIdAndUpdate(bookingId, {
             bookingStatus: "completed",
+            paymentStatus: "paid",
+          });
+          if (booking) {
+            await Payment.create({
+              bookingId: booking._id,
+              price: booking.price,
+              paymentStatus: "paid",
+              userId: booking.userId,
+            });
+          }
+        }
+        break;
+      }
+      // checkout session failed
+      case "checkout.session.async_payment_failed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        const bookingId = session.metadata?.bookingId;
+        if (bookingId) {
+          await Booking.findByIdAndUpdate(bookingId, {
+            paymentStatus: "failed",
           });
         }
         break;

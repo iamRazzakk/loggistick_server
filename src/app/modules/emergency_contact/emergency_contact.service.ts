@@ -45,17 +45,18 @@ const createEmergencyContactIntoDB = async (
 };
 
 const getEmergencyContactFromDB = async (user: JwtPayload) => {
-  const userId = user.id;
-  const cached = await redisService.get(emergencyContactCacheKey(userId));
+  const cached = await redisService.get(emergencyContactCacheKey(user.id!));
   if (cached) {
+    console.log("=========>From cached data");
     return JSON.parse(cached);
   }
 
-  const contact = await EmergencyContact.findOne({ userId })
+  const contact = await EmergencyContact.findOne({ userId: user.id! })
     .select("-__v")
     .lean();
   if (contact) {
-    await cacheContact(userId, contact);
+    await cacheContact(user.id!, contact);
+    console.log("=========>From DB");
   }
   return contact;
 };

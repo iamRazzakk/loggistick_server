@@ -7,7 +7,7 @@ export const EMERGENCY_RELATIONSHIPS = [
   "other",
 ] as const;
 
-export const EMERGENCY_CONTACT_CACHE_TTL = 24 * 60 * 60;
+export const EMERGENCY_CONTACT_CACHE_TTL = 24 * 60 * 60; // 24 hours
 
 export const emergencyContactCacheKey = (userId: string) =>
   `emergencyContact:${userId}`;

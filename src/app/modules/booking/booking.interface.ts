@@ -76,6 +76,7 @@ export type IBooking = {
   recurringBatchId?: string;
   price?: number;
   isApproved?: "pending" | "approved" | "rejected";
+  paymentStatus?: "pending" | "paid" | "failed";
   cancelledBy?: Types.ObjectId;
 };
 

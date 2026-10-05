@@ -4,6 +4,10 @@ import ApiError from "../../../errors/ApiErrors";
 import { ICounty } from "../serviceAndTariff/counties/counties.interface";
 import { County } from "../serviceAndTariff/counties/counties.model";
 import { Mobility } from "../serviceAndTariff/mobility/mobility.model";
+import { Booking } from "./booking.model";
+import { User } from "../user/user.model";
+import stripe from "../../../config/stripe";
+import config from "../../../config";
 
 type LngLat = [number, number]; // [longitude, latitude]
 
@@ -155,4 +159,53 @@ export const toBookingErrorMessage = (error: unknown) => {
   }
 
   return message || "Failed to create recurring bookings. Please try again.";
+};
+
+export const handlePayment = async (id: string) => {
+  const existing = await Booking.findById(id)
+    .lean()
+    .select("price userId bookingStatus");
+
+  if (!existing) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
+  }
+  if (existing.bookingStatus === "completed") {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Booking is already completed");
+  }
+
+  const amount = existing.price ?? 0;
+  if (amount <= 0) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Booking price is missing");
+  }
+
+  const rider = await User.findById(existing.userId).lean().select("email");
+  if (!rider?.email) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Rider email not found");
+  }
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    customer_email: rider.email,
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency: "usd",
+          unit_amount: Math.round(amount * 100),
+          product_data: { name: `Booking ${id}` },
+        },
+      },
+    ],
+    metadata: { bookingId: id },
+    success_url: `${config.stripe.paymentSuccess}?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${config.stripe.paymentCancel}`,
+  });
+
+  const { bookingStatus: _status, paymentStatus, ...rest } = existing;
+  const booking = await Booking.findByIdAndUpdate(id, rest, { new: true });
+  if (!booking) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
+  }
+
+  return { booking, checkoutUrl: session.url };
 };

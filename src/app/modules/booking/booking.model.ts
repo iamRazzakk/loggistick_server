@@ -142,6 +142,12 @@ const bookingSchema = new Schema<IBooking, BookingModel>(
       enum: ["pending", "approved", "rejected"],
       required: false,
     },
+    paymentStatus: {
+      type: String,
+      enum: ["pending", "paid", "failed"],
+      required: false,
+      default: "pending",
+    },
     cancelledBy: {
       type: Schema.Types.ObjectId,
       ref: "User",
