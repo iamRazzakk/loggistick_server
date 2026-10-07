@@ -6,6 +6,8 @@ export type IReports = {
   documents: string;
   reportedBy: Types.ObjectId;
   tripId: Types.ObjectId;
+  reason: string;
 };
+
 
 export type ReportsModel = Model<IReports>;

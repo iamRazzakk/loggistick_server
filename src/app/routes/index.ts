@@ -27,6 +27,7 @@ import { NotificationRoutes } from "../modules/notification/notification.routes"
 import { EmergencyContactRoutes } from "../modules/emergency_contact/emergency_contact.route";
 import { PaymentRoutes } from "../modules/payment/payment.route";
 import { BroadcastNotificationRoutes } from "../modules/broadcast_notification/broadcast.route";
+import { ContuctDispatcherRoutes } from "../modules/appApi/contuct/contuctDispatcher.routes";
 
 const router = express.Router();
 
@@ -59,6 +60,7 @@ const apiRoutes = [
   { path: "/bankcard", route: BankcardRoutes },
   { path: "/emergency-contact", route: EmergencyContactRoutes },
   { path: "/payment", route: PaymentRoutes },
+  { path: "/contuct-dispatcher", route: ContuctDispatcherRoutes },
 ];
 
 apiRoutes.forEach((route) => router.use(route.path, route.route));

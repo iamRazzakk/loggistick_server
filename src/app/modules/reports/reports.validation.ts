@@ -15,6 +15,11 @@ const reportZodSchema = z.object({
       required_error: "Trip ID is required",
     })
     .optional(),
+  reason: z
+    .string({
+      required_error: "Reason is required",
+    })
+    .optional(),
   documents: z
     .string({
       required_error: "Documents is required",

@@ -15,7 +15,7 @@ const reportsSchema = new Schema<IReports, ReportsModel>(
     },
     documents: {
       type: String,
-      required: true,
+      required: false,
     },
     reportedBy: {
       type: Schema.Types.ObjectId,
@@ -25,6 +25,10 @@ const reportsSchema = new Schema<IReports, ReportsModel>(
     tripId: {
       type: Schema.Types.ObjectId,
       ref: "Booking",
+      required: true,
+    },
+    reason: {
+      type: String,
       required: true,
     },
   },
