@@ -1,6 +1,7 @@
 import express from "express";
 import { FacilitiesAndProgramsController } from "./facilities_and_programs.controller";
 import auth from "../../middlewares/auth";
+import checkDispatcherRoute from "../../middlewares/checkDispatcherRoute";
 import { USER_ROLES } from "../../../enums/user";
 import validateRequest from "../../middlewares/validateRequest";
 import { FacilitiesAndProgramsValidations } from "./facilities_and_programs.validation";
@@ -23,6 +24,7 @@ router
       USER_ROLES.DISPATCHER,
       USER_ROLES.DRIVER,
     ),
+    checkDispatcherRoute("/cms"),
     FacilitiesAndProgramsController.getAllFacilitiesAndPrograms,
   );
 
@@ -35,6 +37,7 @@ router
       USER_ROLES.DISPATCHER,
       USER_ROLES.DRIVER,
     ),
+    checkDispatcherRoute("/cms"),
     FacilitiesAndProgramsController.getSingleFacilitiesAndPrograms,
   )
   .patch(

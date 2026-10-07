@@ -38,12 +38,11 @@ export type IUser = {
     updatedAt: Date;
   };
   trip: number;
-  deviceToken?: string;
+  fcmToken?: string | null;
 };
 
 export type UserModal = {
   isExistUserById(id: string): any;
   isExistUserByEmail(email: string): any;
-  isAccountCreated(id: string): any;
   isMatchPassword(password: string, hashPassword: string): boolean;
 } & Model<IUser>;

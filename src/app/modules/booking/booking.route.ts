@@ -1,6 +1,7 @@
 import express from "express";
 import { BookingController } from "./booking.controller";
 import auth from "../../middlewares/auth";
+import checkDispatcherRoute from "../../middlewares/checkDispatcherRoute";
 import { USER_ROLES } from "../../../enums/user";
 import validateRequest from "../../middlewares/validateRequest";
 import { BookingValidations } from "./booking.validation";
@@ -12,6 +13,7 @@ router
   // create booking API
   .post(
     auth(USER_ROLES.DISPATCHER, USER_ROLES.SUPER_ADMIN, USER_ROLES.USER),
+    checkDispatcherRoute("/bookings"),
     validateRequest(BookingValidations.createBookingZodSchema),
     BookingController.createBooking,
   )
@@ -30,6 +32,7 @@ router
   .route("/approved")
   .get(
     auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+    checkDispatcherRoute("/bookings"),
     BookingController.getAllApprovedBookings,
   );
 // my bookings API
@@ -42,6 +45,7 @@ router
       USER_ROLES.SUPER_ADMIN,
       USER_ROLES.USER,
     ),
+    checkDispatcherRoute("/bookings"),
     BookingController.getAllMyBookings,
   );
 
@@ -55,14 +59,28 @@ router
       USER_ROLES.SUPER_ADMIN,
       USER_ROLES.USER,
     ),
+    checkDispatcherRoute("/trips"),
     BookingController.getTripHistory,
   );
-
+// trip history in excel API
+router
+  .route("/history/excel")
+  .get(
+    auth(
+      USER_ROLES.DISPATCHER,
+      USER_ROLES.DRIVER,
+      USER_ROLES.SUPER_ADMIN,
+      USER_ROLES.USER,
+    ),
+    checkDispatcherRoute("/trips"),
+    BookingController.getTripHistoryInExcel,
+  );
 // scheduled bookings
 router
   .route("/scheduled")
   .get(
     auth(USER_ROLES.DISPATCHER, USER_ROLES.DRIVER, USER_ROLES.SUPER_ADMIN),
+    checkDispatcherRoute("/schedule"),
     BookingController.getScheduledBookings,
   );
 // calculate total trip price
@@ -78,6 +96,7 @@ router
       USER_ROLES.SUPER_ADMIN,
       USER_ROLES.USER,
     ),
+    checkDispatcherRoute("/bookings"),
     BookingController.getBookingById,
   )
   .patch(
@@ -87,6 +106,7 @@ router
       USER_ROLES.SUPER_ADMIN,
       USER_ROLES.USER,
     ),
+    checkDispatcherRoute("/bookings"),
     validateRequest(BookingValidations.updateBookingZodSchema),
     BookingController.updateBooking,
   );

@@ -1,6 +1,7 @@
 import express, { NextFunction, Request, Response } from "express";
 import { USER_ROLES } from "../../../enums/user";
 import auth from "../../middlewares/auth";
+import checkDispatcherRoute from "../../middlewares/checkDispatcherRoute";
 import { MessageController } from "./message.controller";
 import { fileUploadHandler } from "../../../shared/fileUploadHandler";
 import { getSingleFilePath } from "../../middlewares/fileUploaderHandlar";
@@ -15,6 +16,7 @@ router.post(
     USER_ROLES.USER,
     USER_ROLES.DRIVER,
   ),
+  checkDispatcherRoute("/support"),
   async (req: Request, _res: Response, next: NextFunction) => {
     try {
       const data = req.body;
@@ -40,6 +42,7 @@ router.get(
     USER_ROLES.USER,
     USER_ROLES.DRIVER,
   ),
+  checkDispatcherRoute("/support"),
   MessageController.getMessage,
 );
 

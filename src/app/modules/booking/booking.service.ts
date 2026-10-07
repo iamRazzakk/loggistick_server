@@ -8,6 +8,8 @@ import { generateRecurringDates } from "../../../util/recurringBooking";
 import { Types } from "mongoose";
 import { format } from "date-fns";
 import { randomUUID } from "crypto";
+import ExcelJS from "exceljs";
+
 import {
   bookingQueue,
   bookingQueueEvents,
@@ -23,6 +25,10 @@ import {
 import { sendNotifications } from "../../../helpers/notificationsHelper";
 import stripe from "../../../config/stripe";
 import { Driverrating } from "../driverrating/driverrating.model";
+import {
+  buildPendingBookingFilter,
+  buildTripHistoryFilter,
+} from "./booking.query";
 
 const JOB_WAIT_MS = 120_000;
 
@@ -156,15 +162,17 @@ const getAllBookingsFromDB = async (
     limit: Math.min(Math.max(Number(query.limit) || 10, 1), 50),
     page: Math.max(Number(query.page) || 1, 1),
   };
+
+  const bookingFilter = await buildPendingBookingFilter(query.searchTerm);
+
   const qb = new QueryBuilder(
-    Booking.find({ isApproved: "pending" }).select(
+    Booking.find(bookingFilter).select(
       "userId driverId mobilityRequirements payerSource bookingStatus isApproved tripType tripReason serviceDate appointmentTime pickupTime returnTime passengerSeats price pickupLocation dropOffLocation stopAddress recurringBooking createdAt",
     ),
     safeQuery,
   )
     .filter()
     .sort()
-    .search(["bookingStatus", "tripReason", "isApproved"])
     .paginate()
     .populate(["userId", "driverId", "mobilityRequirements", "payerSource"], {
       userId: "firstName lastName middleName profile",
@@ -172,14 +180,13 @@ const getAllBookingsFromDB = async (
       mobilityRequirements: "name price icon",
       payerSource: "name type",
     });
-  const data = await qb.modelQuery.lean().exec();
-  return {
-    data,
-    meta: {
-      page: safeQuery.page,
-      limit: safeQuery.limit,
-    },
-  };
+
+  const [data, meta] = await Promise.all([
+    qb.modelQuery.lean().exec(),
+    qb.getPaginationInfo(),
+  ]);
+
+  return { data, meta };
 };
 
 // all approved bookings
@@ -209,26 +216,28 @@ const getTripHistoryFromDB = async (
   _user: JwtPayload,
   query: Record<string, any>,
 ) => {
-  const { serviceDate: _ignored, ...restQuery } = query;
+  const {
+    searchTerm: _searchTerm,
+    serviceDate: _serviceDate,
+    driverId: _driverId,
+    payerSource: _payerSource,
+    payerId: _payerId,
+    ...restQuery
+  } = query;
+
   if (!restQuery.sort) {
     restQuery.sort = "-serviceDate";
   }
 
-  const qb = new QueryBuilder(
-    Booking.find({
-      driverId: { $exists: true, $ne: null },
-      bookingStatus: { $ne: "pending" },
-    }),
-    restQuery,
-  )
+  const bookingFilter = await buildTripHistoryFilter(query);
+
+  const qb = new QueryBuilder(Booking.find(bookingFilter), restQuery)
     .filter()
     .sort()
-    .search(["bookingStatus", "tripReason", "tripNote"])
     .populate(["userId", "driverId"], {
       userId: "firstName lastName middleName profile",
       driverId: "firstName lastName middleName profile",
     })
-    .sort()
     .fields()
     .paginate();
 
@@ -236,7 +245,84 @@ const getTripHistoryFromDB = async (
     qb.modelQuery.lean().exec(),
     qb.getPaginationInfo(),
   ]);
+
   return { data, meta };
+};
+// trip history get in excel file
+const getTripHistoryInExcelFromDB = async (
+  _user: JwtPayload,
+  query: Record<string, any>,
+) => {
+  const bookingFilter = await buildTripHistoryFilter(query);
+  const bookings = await Booking.find(bookingFilter)
+    .sort(query.sort || "-serviceDate")
+    .populate("userId", "firstName middleName lastName profile")
+    .populate("driverId", "firstName middleName lastName profile")
+    .lean();
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Trip History");
+  worksheet.columns = [
+    { header: "Booking Id", key: "bookingId", width: 28 },
+    { header: "Rider", key: "rider", width: 24 },
+    { header: "Driver", key: "driver", width: 24 },
+    { header: "Pickup", key: "pickupLocation", width: 22 },
+    { header: "Drop Off", key: "dropOffLocation", width: 22 },
+    { header: "Stop", key: "stopAddress", width: 22 },
+    { header: "Trip Type", key: "tripType", width: 14 },
+    { header: "Trip Reason", key: "tripReason", width: 18 },
+    { header: "Passenger Seats", key: "passengerSeats", width: 16 },
+    { header: "Service Date", key: "serviceDate", width: 16 },
+    { header: "Appointment Time", key: "appointmentTime", width: 18 },
+    { header: "Pickup Time", key: "pickupTime", width: 14 },
+    { header: "Return Time", key: "returnTime", width: 14 },
+    { header: "Recurring", key: "recurringBooking", width: 12 },
+    { header: "Selected Days", key: "selectedDate", width: 28 },
+    { header: "End Date", key: "endDate", width: 14 },
+    { header: "Booking Status", key: "bookingStatus", width: 16 },
+    { header: "Price", key: "price", width: 12 },
+    { header: "Approval", key: "isApproved", width: 14 },
+    { header: "Payment Status", key: "paymentStatus", width: 16 },
+    { header: "Created At", key: "createdAt", width: 24 },
+  ];
+  bookings.forEach((booking) => {
+    const rider = booking.userId as {
+      firstName?: string;
+      middleName?: string;
+      lastName?: string;
+    } | null;
+    const driver = booking.driverId as {
+      firstName?: string;
+      middleName?: string;
+      lastName?: string;
+    } | null;
+    worksheet.addRow({
+      bookingId: String(booking._id),
+      rider: (rider?.firstName, rider?.middleName, rider?.lastName),
+      driver: (driver?.firstName, driver?.middleName, driver?.lastName),
+      pickupLocation: (booking.pickupLocation ?? []).join(", "),
+      dropOffLocation: (booking.dropOffLocation ?? []).join(", "),
+      stopAddress: (booking.stopAddress ?? []).join(", "),
+      tripType: booking.tripType,
+      tripReason: booking.tripReason,
+      passengerSeats: booking.passengerSeats,
+      serviceDate: booking.serviceDate,
+      appointmentTime: booking.appointmentTime,
+      pickupTime: booking.pickupTime,
+      returnTime: booking.returnTime ?? "",
+      recurringBooking: booking.recurringBooking ? "yes" : "no",
+      selectedDate: ((booking.selectedDate as string[]) ?? []).join(", "),
+      endDate: booking.endDate ?? "",
+      bookingStatus: booking.bookingStatus,
+      price: booking.price,
+      isApproved: booking.isApproved,
+      paymentStatus: booking.paymentStatus,
+      createdAt: (booking as any).createdAt
+        ? new Date((booking as any).createdAt).toISOString()
+        : "",
+    });
+  });
+  worksheet.getRow(1).font = { bold: true };
+  return workbook.xlsx.writeBuffer().then((buffer: any) => Buffer.from(buffer));
 };
 
 // update booking
@@ -258,7 +344,6 @@ const updateBookingInDB = async (
   const booking = await Booking.findByIdAndUpdate(id, payload, { new: true });
   if (!booking) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
-    
   }
   return booking;
 };
@@ -381,4 +466,5 @@ export const BookingServices = {
   getScheduledBookingsFromDB,
   getSingleRiderBookingHistoryFromDB,
   calculateTotalTripPrice,
+  getTripHistoryInExcelFromDB,
 };

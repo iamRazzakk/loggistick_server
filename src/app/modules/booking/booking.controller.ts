@@ -37,7 +37,6 @@ const getAllBookings = catchAsync(async (req: Request, res: Response) => {
     statusCode: StatusCodes.OK,
     success: true,
     message: "Bookings fetched successfully",
-    // @ts-ignore
     pagination: bookings.meta,
     data: bookings.data,
   });
@@ -71,6 +70,24 @@ const getTripHistory = catchAsync(async (req: Request, res: Response) => {
     data: bookings.data,
   });
 });
+
+const getTripHistoryInExcel = catchAsync(
+  async (req: Request, res: Response) => {
+    const buffer = await BookingServices.getTripHistoryInExcelFromDB(
+      req.user,
+      req.query,
+    );
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="trip-history.xlsx"',
+    );
+    res.status(StatusCodes.OK).send(buffer);
+  },
+);
 
 const updateBooking = catchAsync(async (req: Request, res: Response) => {
   const booking = await BookingServices.updateBookingInDB(
@@ -145,6 +162,7 @@ export const BookingController = {
   getAllBookings,
   getAllApprovedBookings,
   getTripHistory,
+  getTripHistoryInExcel,
   updateBooking,
   getBookingById,
   getScheduledBookings,

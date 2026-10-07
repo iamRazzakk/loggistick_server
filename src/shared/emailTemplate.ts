@@ -116,8 +116,46 @@ const userCredentials = (values: IUserCredentials) => {
   return data;
 };
 
+// dispatcher created
+const dispatcherCreated = (values: {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  middleName: string;
+}) => {
+  const data = {
+    to: values.email,
+    subject: `Dispatcher created successfully`,
+    html: `
+            <body style="font-family: Arial, sans-serif; background-color: #f9f9f9; margin: 50px; padding: 20px; color: #555;">
+                <div style="width: 100%; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fff; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
+
+                    ${logoHtml}
+
+                    <h2 style="color: ${BRAND_COLOR}; font-size: 24px; margin-bottom: 20px;">Hey, ${values.firstName} ${values.middleName ? values.middleName : ""} ${values.lastName}!</h2>
+
+                    <p style="color: #555; font-size: 16px; line-height: 1.5; margin-bottom: 20px;">Your ${BRAND_NAME} dispatcher account has been created. Use the credentials below to log in:</p>
+
+                    <div style="background-color: #f6f6f6; border-radius: 8px; padding: 16px 20px; margin-bottom: 24px;">
+                        <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 8px 0;"><strong>Email:</strong> ${values.email}</p>
+                        <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0;"><strong>Password:</strong> ${values.password}</p>
+                    </div>
+
+                    <p style="color: #555; font-size: 14px; line-height: 1.5; margin-bottom: 24px;">For your security, please change this password after you log in.</p>
+
+                    <p style="color: #999; font-size: 12px; text-align: center; margin-top: 30px;">If you did not expect this email, please contact support.</p>
+                    ${footerHtml}
+
+            </body>
+        `,
+  };
+  return data;
+};
+
 export const emailTemplate = {
   createAccount,
   resetPassword,
   userCredentials,
+  dispatcherCreated,
 };

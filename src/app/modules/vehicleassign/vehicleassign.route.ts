@@ -1,6 +1,7 @@
 import express from "express";
 import { VehicleAssignController } from "./vehicleassign.controller";
 import auth from "../../middlewares/auth";
+import checkDispatcherRoute from "../../middlewares/checkDispatcherRoute";
 import { USER_ROLES } from "../../../enums/user";
 
 const router = express.Router();
@@ -13,6 +14,7 @@ router
   )
   .get(
     auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+    checkDispatcherRoute("/operations"),
     VehicleAssignController.getAllVehicleAssigns,
   );
 
@@ -20,6 +22,7 @@ router
   .route("/:id")
   .get(
     auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+    checkDispatcherRoute("/operations"),
     VehicleAssignController.getSingleVehicleAssign,
   )
   .patch(

@@ -1,5 +1,6 @@
 import express from "express";
 import auth from "../../middlewares/auth";
+import checkDispatcherRoute from "../../middlewares/checkDispatcherRoute";
 import { USER_ROLES } from "../../../enums/user";
 import { NotificationController } from "./notification.controller";
 const router = express.Router();
@@ -13,6 +14,7 @@ router
       USER_ROLES.DRIVER,
       USER_ROLES.DISPATCHER,
     ),
+    checkDispatcherRoute("/notifications"),
     NotificationController.createNotification,
   )
   .get(
@@ -22,6 +24,7 @@ router
       USER_ROLES.DRIVER,
       USER_ROLES.DISPATCHER,
     ),
+    checkDispatcherRoute("/notifications"),
     NotificationController.getNotificationFromDB,
   );
 
@@ -34,6 +37,7 @@ router
       USER_ROLES.DRIVER,
       USER_ROLES.DISPATCHER,
     ),
+    checkDispatcherRoute("/notifications"),
     NotificationController.readNotification,
   );
 export const NotificationRoutes = router;

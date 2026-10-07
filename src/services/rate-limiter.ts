@@ -14,6 +14,17 @@ export const apiLimiter = rateLimit({
   },
 });
 
+export const notificationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: skipInTest,
+  message: {
+    message: "Too many notification requests, please try again later",
+  },
+});
+
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,

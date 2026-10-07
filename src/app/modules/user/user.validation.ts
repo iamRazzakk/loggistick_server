@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { USER_ROLES } from "../../../enums/user";
+import { DISPATCHER_FRONTEND_ROUTES } from "../../../util/permissionRouteList";
 
 const createAdminZodSchema = z.object({
   body: z.object({
@@ -13,7 +14,6 @@ const createAdminZodSchema = z.object({
     }),
   }),
 });
-
 
 const createUserZodSchema = z.object({
   body: z.object({
@@ -30,6 +30,18 @@ const createUserZodSchema = z.object({
   }),
 });
 
+const updateDispatcherRoutesZodSchema = z.object({
+  body: z
+    .object({
+      accessScope: z.array(z.enum(DISPATCHER_FRONTEND_ROUTES), {
+        required_error: "Access scope is required",
+      }),
+    })
+    .strict(),
+});
 
-
-export const UserValidation = { createAdminZodSchema, createUserZodSchema };
+export const UserValidation = {
+  createAdminZodSchema,
+  createUserZodSchema,
+  updateDispatcherRoutesZodSchema,
+};

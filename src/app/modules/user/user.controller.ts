@@ -19,6 +19,47 @@ const createUser = catchAsync(
   },
 );
 
+// create dispatcher as admin
+const createDispatcherAsAdmin = catchAsync(
+  async (req: Request, res: Response) => {
+    console.log("req.body e::", req.body);
+    const result = await UserService.createDispatcherAsAdminIntoDB(req.body);
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.CREATED,
+      message: "Dispatcher created successfully",
+      data: result,
+    });
+  },
+);
+
+// dispatcher list
+const getAllDispatchers = catchAsync(async (req: Request, res: Response) => {
+  const result = await UserService.getAllDispatchersFromDB(req.query);
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Dispatcher list retrieved successfully",
+
+    pagination: result.meta,
+    data: result.data,
+  });
+});
+
+const updateDispatcherRoutes = catchAsync(
+  async (req: Request, res: Response) => {
+    const result = await UserService.updateDispatcherRoutesIntoDB(
+      req.params.id,
+      req.body.accessScope,
+    );
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: "Dispatcher routes updated successfully",
+      data: result,
+    });
+  },
+);
 // retrieved user profile
 const getUserProfile = catchAsync(async (req: Request, res: Response) => {
   const user = req.user;
@@ -37,8 +78,6 @@ const updateProfile = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const user = req.user;
 
-    
-    
     const result = await UserService.updateProfileToDB(user, req.body);
 
     sendResponse(res, {
@@ -95,4 +134,7 @@ export const UserController = {
   getAllDrivers,
   getAllRiders,
   getAllDriverApplications,
+  createDispatcherAsAdmin,
+  updateDispatcherRoutes,
+  getAllDispatchers,
 };

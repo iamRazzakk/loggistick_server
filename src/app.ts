@@ -8,7 +8,6 @@ import session from "express-session";
 
 import helmet from "helmet";
 import { apiLimiter } from "./services/rate-limiter";
-import { requireCsrfWhenUsingAuthCookies } from "./util/cookie";
 import router from "./app/routes";
 import handleStripeWebhook from "./helpers/handleStripeWebhook";
 const app = express();
@@ -49,17 +48,7 @@ app.use(
   }),
 );
 
-// Initialize Passport
-// app.use(passport.initialize());
-// app.use(passport.session());
-
-//router
-app.use(
-  "/api/v1",
-  apiLimiter,
-  //  requireCsrfWhenUsingAuthCookies,
-  router,
-);
+app.use("/api/v1", apiLimiter, router);
 
 app.get("/", (_req: Request, res: Response) => {
   const currentTime = new Date().toLocaleString();

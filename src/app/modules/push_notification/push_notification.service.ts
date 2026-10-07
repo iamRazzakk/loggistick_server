@@ -18,11 +18,11 @@ const createPushNotificationIntoDB = async (payload: IPushNotification) => {
   const users = await User.find({
     role: payload.role,
     isBanned: false,
-    deviceToken: { $exists: true, $nin: [null, ""] },
-  }).select("deviceToken");
+    fcmToken: { $exists: true, $nin: [null, ""] },
+  }).select("fcmToken");
 
   const tokens = users
-    .map((user) => user.deviceToken)
+    .map((user) => user.fcmToken)
     .filter((token): token is string => Boolean(token));
 
   // if (tokens.length) {

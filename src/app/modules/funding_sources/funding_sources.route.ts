@@ -1,6 +1,7 @@
 import express from "express";
 import { FundingSourcesController } from "./funding_sources.controller";
 import auth from "../../middlewares/auth";
+import checkDispatcherRoute from "../../middlewares/checkDispatcherRoute";
 import { USER_ROLES } from "../../../enums/user";
 import validateRequest from "../../middlewares/validateRequest";
 import { FundingSourcesValidations } from "./funding_sources.validation";
@@ -21,6 +22,7 @@ router
       USER_ROLES.DISPATCHER,
       USER_ROLES.DRIVER,
     ),
+    checkDispatcherRoute("/finance"),
     FundingSourcesController.getAllFundingSources,
   );
 
@@ -33,6 +35,7 @@ router
       USER_ROLES.DISPATCHER,
       USER_ROLES.DRIVER,
     ),
+    checkDispatcherRoute("/finance"),
     FundingSourcesController.getSingleFundingSources,
   )
   .patch(

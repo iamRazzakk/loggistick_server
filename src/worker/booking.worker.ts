@@ -107,4 +107,3 @@ bookingWorker.on("failed", (job, err) => {
   );
 });
 
-export default bookingWorker;

@@ -69,7 +69,7 @@ const userSchema = new Schema<IUser, UserModal>(
     },
     accessScope: {
       type: [String],
-      required: false,
+      default: [],
     },
     isBanned: {
       type: Boolean,
@@ -143,7 +143,7 @@ const userSchema = new Schema<IUser, UserModal>(
       type: Boolean,
       default: false,
     },
-    deviceToken: {
+    fcmToken: {
       type: String,
       required: false,
       default: null,
@@ -169,12 +169,6 @@ userSchema.statics.isExistUserById = async (id: string) => {
 userSchema.statics.isExistUserByEmail = async (email: string) => {
   const isExist = await User.findOne({ email });
   return isExist;
-};
-
-//account check
-userSchema.statics.isAccountCreated = async (id: string) => {
-  const isUserExist: any = await User.findById(id);
-  return isUserExist.accountInformation.status;
 };
 
 //is match password

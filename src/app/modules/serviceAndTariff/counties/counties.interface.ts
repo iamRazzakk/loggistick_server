@@ -7,7 +7,7 @@ export interface IMileageBasedPrice {
 }
 
 // GeoJSON Polygon
-export interface IGeoJSONPolygon {
+interface IGeoJSONPolygon {
   type: "Polygon" | "MultiPolygon";
   coordinates: number[][][]; // [ [ [lng, lat], ... ] ]
 }

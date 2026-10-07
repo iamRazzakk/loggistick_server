@@ -1,9 +1,10 @@
 import express, { NextFunction, Request, Response } from "express";
 import { USER_ROLES } from "../../../enums/user";
 import { UserController } from "./user.controller";
-import { UserValidation } from "./user.validation";
 import auth from "../../middlewares/auth";
+import checkDispatcherRoute from "../../middlewares/checkDispatcherRoute";
 import validateRequest from "../../middlewares/validateRequest";
+import { UserValidation } from "./user.validation";
 import {
   getSingleFilePath,
   getUploadFields,
@@ -21,6 +22,7 @@ router.get(
     USER_ROLES.USER,
     USER_ROLES.DRIVER,
   ),
+  checkDispatcherRoute("/profile"),
   UserController.getUserProfile,
 );
 
@@ -54,6 +56,7 @@ router
   )
   .patch(
     auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER, USER_ROLES.USER),
+    checkDispatcherRoute("/profile"),
     getUploadFields(),
     async (req: Request, _res: Response, next: NextFunction) => {
       try {
@@ -74,6 +77,19 @@ router
     },
     UserController.updateProfile,
   );
+
+// dispatcher
+router
+  .route("/dispatcher")
+  .post(auth(USER_ROLES.SUPER_ADMIN), UserController.createDispatcherAsAdmin)
+  .get(auth(USER_ROLES.SUPER_ADMIN), UserController.getAllDispatchers);
+
+router.patch(
+  "/dispatcher/:id/routes",
+  auth(USER_ROLES.SUPER_ADMIN),
+  validateRequest(UserValidation.updateDispatcherRoutesZodSchema),
+  UserController.updateDispatcherRoutes,
+);
 
 router
   .route("/drivers")

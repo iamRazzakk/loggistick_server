@@ -165,15 +165,3 @@ export const getSingleFilePath = (
   return undefined;
 };
 
-export const getMultipleFilesPath = (
-  files: Record<string, Express.Multer.File[]>,
-  folder: IFolderName,
-) => {
-  const fieldFiles = files?.[folder];
-  if (fieldFiles && Array.isArray(fieldFiles)) {
-    return fieldFiles.map(
-      (file) => `/${UPLOAD_CONFIG[folder].folder}/${file.filename}`,
-    );
-  }
-  return undefined;
-};

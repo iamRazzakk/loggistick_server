@@ -1,11 +1,11 @@
 import express, { NextFunction, Request, Response } from "express";
 import { USER_ROLES } from "../../../enums/user";
 import auth from "../../middlewares/auth";
+import checkDispatcherRoute from "../../middlewares/checkDispatcherRoute";
 import validateRequest from "../../middlewares/validateRequest";
 import { AuthController } from "./auth.controller";
 import { AuthValidation } from "./auth.validation";
 import { authLimiter } from "../../../services/rate-limiter";
-// import passport from '../../../config/passport'
 const router = express.Router();
 
 router.post(
@@ -66,6 +66,7 @@ router.post(
     USER_ROLES.DRIVER,
     USER_ROLES.DISPATCHER,
   ),
+  checkDispatcherRoute("/profile"),
   validateRequest(AuthValidation.createChangePasswordZodSchema),
   AuthController.changePassword,
 );

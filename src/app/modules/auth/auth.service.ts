@@ -18,10 +18,11 @@ import { User } from "../user/user.model";
 import { jwtHelpers } from "../../../helpers/jwtHelper";
 import { redisService } from "../../../redis/redis.service";
 import { USER_ROLES } from "../../../enums/user";
+import { setDispatcherRoutes } from "../../../helpers/dispatcherRouteCache";
 
 //login
 const loginUserFromDB = async (payload: ILoginData) => {
-  const { email, password, deviceToken } = payload;
+  const { email, password, fcmToken } = payload;
 
   const user = await User.findOne({ email }).select("+password");
   if (!user) {
@@ -33,6 +34,9 @@ const loginUserFromDB = async (payload: ILoginData) => {
       StatusCodes.BAD_REQUEST,
       "Please verify your account first!",
     );
+  }
+  if (user.role != USER_ROLES.SUPER_ADMIN && !fcmToken) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Device token is required!");
   }
   if (user.role === USER_ROLES.DRIVER) {
     if (!user.isAdminVerifiedDriver) {
@@ -49,8 +53,16 @@ const loginUserFromDB = async (payload: ILoginData) => {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Password is incorrect!");
   }
 
-  if (deviceToken) {
-    await User.findByIdAndUpdate(user._id, { deviceToken });
+  if (fcmToken && user.fcmToken !== fcmToken) {
+    await User.updateMany(
+      { _id: { $ne: user._id }, fcmToken },
+      { $set: { fcmToken: null } },
+    );
+    await User.findByIdAndUpdate(user._id, { fcmToken });
+  }
+
+  if (user.role === USER_ROLES.DISPATCHER) {
+    setDispatcherRoutes(user._id.toString(), user.accessScope ?? []);
   }
 
   // Access Token
@@ -65,6 +77,9 @@ const loginUserFromDB = async (payload: ILoginData) => {
     role: user.role,
     accessToken,
     refreshToken,
+    ...(user.role === USER_ROLES.DISPATCHER
+      ? { accessScope: user.accessScope ?? [] }
+      : {}),
   };
 };
 

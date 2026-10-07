@@ -1,6 +1,7 @@
 import express from "express";
 import { CompanySupportController } from "./company_support.controller";
 import auth from "../../middlewares/auth";
+import checkDispatcherRoute from "../../middlewares/checkDispatcherRoute";
 import { USER_ROLES } from "../../../enums/user";
 import validateRequest from "../../middlewares/validateRequest";
 import { CompanySupportValidations } from "./company_support.validation";
@@ -21,6 +22,7 @@ router
       USER_ROLES.DISPATCHER,
       USER_ROLES.DRIVER,
     ),
+    checkDispatcherRoute("/support"),
     CompanySupportController.getCompanySupport,
   );
 

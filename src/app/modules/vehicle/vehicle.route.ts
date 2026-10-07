@@ -1,6 +1,7 @@
 import express from "express";
 import { VehicleController } from "./vehicle.controller";
 import auth from "../../middlewares/auth";
+import checkDispatcherRoute from "../../middlewares/checkDispatcherRoute";
 import { USER_ROLES } from "../../../enums/user";
 import validateRequest from "../../middlewares/validateRequest";
 import { VehicleValidations } from "./vehicle.validation";
@@ -21,6 +22,7 @@ router
       USER_ROLES.DRIVER,
       USER_ROLES.USER,
     ),
+    checkDispatcherRoute("/fleet"),
     VehicleController.getAllVehicles,
   );
 router
@@ -32,6 +34,7 @@ router
       USER_ROLES.DRIVER,
       USER_ROLES.USER,
     ),
+    checkDispatcherRoute("/fleet/:id"),
     VehicleController.getSingleVehicle,
   )
   .patch(

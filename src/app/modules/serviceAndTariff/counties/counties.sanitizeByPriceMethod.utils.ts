@@ -11,7 +11,7 @@ const PER_MILE_ONLY = [
 const MILEAGE_BASED_ONLY = ["mileage_based_price"] as const;
 
 /** All price-related keys that must be cleared when switching method */
-export const ALL_PRICE_FIELD_KEYS = [
+const ALL_PRICE_FIELD_KEYS = [
   ...FLAT_RATE_ONLY,
   ...PER_MILE_ONLY,
   ...MILEAGE_BASED_ONLY,

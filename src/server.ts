@@ -8,6 +8,7 @@ import { Server } from "socket.io";
 import seedSuperAdmin from "./DB";
 import "./worker/email.worker"; // Email worker
 import "./worker/booking.worker"; // Booking worker
+import "./worker/notification.worker"; // Broadcast notification worker
 // redis client
 import "./config/redis.config";
 import { RedisClient } from "./config/redis.config";

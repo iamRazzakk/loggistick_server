@@ -9,6 +9,8 @@ import { randomUUID } from "crypto";
 import { emailQueue } from "../../../queue/email.queue";
 import { redisService } from "../../../redis/redis.service";
 import { USER_ROLES } from "../../../enums/user";
+import { setDispatcherRoutes } from "../../../helpers/dispatcherRouteCache";
+import { findInvalidDispatcherRoutes } from "../../../util/permissionRouteList";
 import QueryBuilder from "../../builder/queryBuilder";
 
 const createUserToDB = async (payload: Partial<IUser>): Promise<IUser> => {
@@ -68,7 +70,8 @@ const updateProfileToDB = async (
     throw new ApiError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
   }
 
-  const updateDoc = await User.findOneAndUpdate({ _id: id }, payload, {
+  const { accessScope: _accessScope, ...safePayload } = payload;
+  const updateDoc = await User.findOneAndUpdate({ _id: id }, safePayload, {
     new: true,
   });
   return updateDoc;
@@ -129,6 +132,105 @@ const getAllDriverApplicationsFromDB = async (
   return { data, meta };
 };
 
+// DISPATCHER create
+
+const normalizeAllowedRoutes = (routes: string[] | undefined): string[] => {
+  if (!routes) {
+    return [];
+  }
+
+  const unique = [
+    ...new Set(
+      routes.map((route) => {
+        const trimmed = route.trim();
+        return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+      }),
+    ),
+  ];
+
+  const invalid = findInvalidDispatcherRoutes(unique);
+  if (invalid.length) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      `Invalid dispatcher routes: ${invalid.join(", ")}`,
+    );
+  }
+  return unique;
+};
+
+// dispatcher list
+const getAllDispatchersFromDB = async (
+  query: Record<string, any>,
+): Promise<{ data: Partial<IUser>[]; meta: any }> => {
+  const qb = new QueryBuilder(User.find({ role: USER_ROLES.DISPATCHER }), query)
+    .filter()
+    .sort()
+    .search(["firstName", "lastName", "middleName", "email", "contact"])
+    .paginate();
+  const [data, meta] = await Promise.all([
+    qb.modelQuery.exec(),
+    qb.getPaginationInfo(),
+  ]);
+  return { data, meta };
+};
+
+const createDispatcherAsAdminIntoDB = async (payload: Partial<IUser>) => {
+  if (!payload.accessScope) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Access scope is required!");
+  }
+  const accessScope = normalizeAllowedRoutes(payload.accessScope);
+  const result = await User.create({
+    firstName: payload.firstName,
+    lastName: payload.lastName,
+    middleName: payload.middleName,
+    email: payload.email,
+    password: payload.password,
+    accessScope,
+    verified: true,
+    contact: payload.contact,
+    dateOfBirth: new Date(),
+    role: USER_ROLES.DISPATCHER,
+  });
+  setDispatcherRoutes(result._id.toString(), accessScope);
+  // send email
+  const createAccountTemplate = emailTemplate.dispatcherCreated({
+    email: result.email!,
+    password: payload.password!,
+    firstName: result.firstName,
+    lastName: result.lastName,
+    middleName: result.middleName ?? "",
+  });
+  const emailData = {
+    jobId: randomUUID(),
+    to: createAccountTemplate.to,
+    subject: createAccountTemplate.subject,
+    html: createAccountTemplate.html,
+    type: "create_account",
+  };
+  await emailQueue.add("send-email", emailData);
+
+  return result;
+};
+
+const updateDispatcherRoutesIntoDB = async (
+  dispatcherId: string,
+  accessScope: string[],
+) => {
+  const routes = normalizeAllowedRoutes(accessScope);
+  const dispatcher = await User.findOneAndUpdate(
+    { _id: dispatcherId, role: USER_ROLES.DISPATCHER },
+    { accessScope: routes },
+    { new: true },
+  ).select("firstName lastName email role accessScope");
+
+  if (!dispatcher) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Dispatcher doesn't exist!");
+  }
+
+  setDispatcherRoutes(dispatcherId, routes);
+  return dispatcher;
+};
+
 export const UserService = {
   createUserToDB,
   getUserProfileFromDB,
@@ -136,4 +238,7 @@ export const UserService = {
   getAllDriversFromDB,
   getAllRidersFromDB,
   getAllDriverApplicationsFromDB,
+  createDispatcherAsAdminIntoDB,
+  updateDispatcherRoutesIntoDB,
+  getAllDispatchersFromDB,
 };

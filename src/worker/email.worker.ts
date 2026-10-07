@@ -43,4 +43,3 @@ worker.on("failed", (job, err) => {
   );
 });
 
-export default worker;

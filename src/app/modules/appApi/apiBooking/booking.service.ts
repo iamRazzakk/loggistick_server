@@ -130,6 +130,7 @@ const getUserOnGoingBookingTodayFromDB = async (user: JwtPayload) => {
   const booking = await Booking.findOne({
     userId: new Types.ObjectId(user.id),
     serviceDate: today,
+    bookingStatus: { $nin: ["cancelled", "completed"] },
   })
     .populate({
       path: "driverId",

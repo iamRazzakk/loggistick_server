@@ -26,6 +26,7 @@ import { BankcardRoutes } from "../modules/bankcard/bankcard.route";
 import { NotificationRoutes } from "../modules/notification/notification.routes";
 import { EmergencyContactRoutes } from "../modules/emergency_contact/emergency_contact.route";
 import { PaymentRoutes } from "../modules/payment/payment.route";
+import { BroadcastNotificationRoutes } from "../modules/broadcast_notification/broadcast.route";
 
 const router = express.Router();
 
@@ -43,6 +44,7 @@ const apiRoutes = [
   { path: "/faq", route: FaqRoutes },
   { path: "/push-notification", route: PushNotificationRoutes },
   { path: "/notification", route: NotificationRoutes },
+  { path: "/notifications", route: BroadcastNotificationRoutes },
   { path: "/counties", route: CountiesRoutes },
   { path: "/mobility", route: MobilityRoutes },
   { path: "/payers", route: PayersRoutes },
