@@ -22,7 +22,10 @@ import {
   handlePayment,
   toBookingErrorMessage,
 } from "./booking.utils";
-import { sendNotifications } from "../../../helpers/notificationsHelper";
+import {
+  sendNotifications,
+  sendPushNotification,
+} from "../../../helpers/notificationsHelper";
 import stripe from "../../../config/stripe";
 import { Driverrating } from "../driverrating/driverrating.model";
 import {
@@ -345,6 +348,23 @@ const updateBookingInDB = async (
   if (!booking) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
   }
+  const userData = await User.findById(booking.userId).select(
+    "firstName lastName role",
+  );
+  const actorId = user.id?.toString();
+  const recipientIds = [booking.userId, booking.driverId]
+    .map((id) => id?.toString())
+    .filter((id): id is string => Boolean(id) && id !== actorId);
+
+  await sendPushNotification({
+    userIds: recipientIds,
+    title: `${userData?.firstName} ${userData?.lastName} ${booking.bookingStatus} your trip`,
+    body: `${booking.bookingStatus} your trip`,
+    data: {
+      screen: "booking",
+      referenceId: booking._id.toString(),
+    },
+  });
   return booking;
 };
 

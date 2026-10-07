@@ -6,6 +6,7 @@ import { User } from "../user/user.model";
 import { DASHBOARD_SEARCHABLE_FIELDS } from "./dashboard.constants";
 import { Vehicle } from "../vehicle/vehicle.model";
 import { Payment } from "../payment/payment.model";
+import { JwtPayload } from "jsonwebtoken";
 
 const dashboardOverviewFromDB = async () => {
   const today = format(new Date(), "yyyy-MM-dd");
@@ -160,10 +161,40 @@ const getAdminTripDistributionFromDB = async () => {
   return tripDistribution;
 };
 
+// rider trip history
+
+const getRiderAndUserTripHistoryFromDB = async (
+  query: Record<string, any>,
+  id: string,
+) => {
+  const qb = new QueryBuilder(
+    Booking.find({
+      $or: [{ userId: id }, { driverId: id }],
+    }),
+    query,
+  )
+    .paginate()
+    .fields()
+    .populate(["userId", "driverId"], {
+      userId: "firstName lastName middleName profile",
+      driverId: "firstName lastName middleName profile",
+    });
+
+  const [meta, data] = await Promise.all([
+    qb.getPaginationInfo(),
+    qb.modelQuery.exec(),
+  ]);
+
+  return {
+    meta,
+    data,
+  };
+};
 export const DashboardServices = {
   dashboardOverviewFromDB,
   activeTripsFromDB,
   pendingTripsFromDB,
   getAdminDashboardOverviewFromDB,
   getAdminTripDistributionFromDB,
+  getRiderAndUserTripHistoryFromDB,
 };

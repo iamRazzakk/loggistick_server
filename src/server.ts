@@ -9,6 +9,7 @@ import seedSuperAdmin from "./DB";
 import "./worker/email.worker"; // Email worker
 import "./worker/booking.worker"; // Booking worker
 import "./worker/notification.worker"; // Broadcast notification worker
+import "./worker/pushNotification.worker"; // Push notification worker
 // redis client
 import "./config/redis.config";
 import { RedisClient } from "./config/redis.config";

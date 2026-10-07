@@ -15,7 +15,7 @@ const createVehicle = catchAsync(async (req: Request, res: Response) => {
   });
 });
 const getAllVehicles = catchAsync(async (req: Request, res: Response) => {
-  const result = await VehicleServices.getAllVehiclesFromDB();
+  const result = await VehicleServices.getAllVehiclesFromDB(req.query);
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,
@@ -23,6 +23,8 @@ const getAllVehicles = catchAsync(async (req: Request, res: Response) => {
     data: result,
   });
 });
+
+
 const getSingleVehicle = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
   const result = await VehicleServices.getSingleVehicleFromDB(id);

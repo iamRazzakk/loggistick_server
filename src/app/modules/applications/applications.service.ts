@@ -20,7 +20,14 @@ const updateDriverApplicationsStatusToDB = async (
 };
 
 const getAllDriverFromDB = async (query: Record<string, any>) => {
-  const qb = new QueryBuilder(User.find({ role: USER_ROLES.DRIVER }), query)
+  const qb = new QueryBuilder(
+    User.find({
+      role: USER_ROLES.DRIVER,
+      isAdminVerifiedDriver: true,
+      // applicationStatus: "approved",
+    }),
+    query,
+  )
     .paginate()
     .sort();
   const [data, meta] = await Promise.all([

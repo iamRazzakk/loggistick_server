@@ -42,6 +42,22 @@ const sendNotificationToUsers = async (
         body: payload.body,
       },
       ...(payload.data ? { data: payload.data } : {}),
+      android: {
+        priority: "high",
+        notification: {
+          sound: "default",
+        },
+      },
+      apns: {
+        headers: {
+          "apns-priority": "10",
+        },
+        payload: {
+          aps: {
+            sound: "default",
+          },
+        },
+      },
     });
 
     successCount += response.successCount;

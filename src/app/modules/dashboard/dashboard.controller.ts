@@ -65,10 +65,27 @@ const getAdminDashboardOverview = catchAsync(
   },
 );
 
+const getRiderAndUserTripHistory = catchAsync(
+  async (req: Request, res: Response, _next: NextFunction) => {
+    const { id } = req.params;
+    const result = await DashboardServices.getRiderAndUserTripHistoryFromDB(
+      req.query,
+      id,
+    );
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: "Rider trip history fetched successfully",
+      pagination: result.meta,
+      data: result.data,
+    });
+  },
+);
 export const DashboardController = {
   dashboardOverview,
   activeTrips,
   pendingTrips,
   getAdminTripDistribution,
   getAdminDashboardOverview,
+  getRiderAndUserTripHistory,
 };

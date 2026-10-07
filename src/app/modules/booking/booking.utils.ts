@@ -202,9 +202,19 @@ export const handlePayment = async (id: string) => {
   });
 
   const { bookingStatus: _status, paymentStatus, ...rest } = existing;
-  const booking = await Booking.findByIdAndUpdate(id, rest, { new: true });
-  if (!booking) {
-    throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
+  const [booking, user] = await Promise.all([
+    Booking.findByIdAndUpdate(id, rest, { new: true }),
+    User.findByIdAndUpdate(
+      existing.userId,
+      { $inc: { trip: 1 } },
+      { new: true },
+    ),
+  ]);
+  if (!booking || !user) {
+    throw new ApiError(
+      StatusCodes.NOT_FOUND,
+      `${!booking ? "Booking" : "User"} not found`,
+    );
   }
 
   return { booking, checkoutUrl: session.url };

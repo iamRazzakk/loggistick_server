@@ -1,8 +1,17 @@
 import { StatusCodes } from "http-status-codes";
 import ApiError from "../../../errors/ApiErrors";
+import QueryBuilder from "../../builder/queryBuilder";
 import { IVehicle } from "./vehicle.interface";
 import { Vehicle } from "./vehicle.model";
 import { redisService } from "../../../redis/redis.service";
+
+const escapeRegex = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const caseInsensitive = (value: string) => ({
+  $regex: escapeRegex(value),
+  $options: "i",
+});
 
 const createVehicleIntoDB = async (payload: IVehicle) => {
   const result = await Vehicle.create(payload);
@@ -13,23 +22,60 @@ const createVehicleIntoDB = async (payload: IVehicle) => {
   return result;
 };
 
-const getAllVehiclesFromDB = async () => {
+const readQueryString = (value: unknown) =>
+  typeof value === "string" ? value.trim() : "";
+
+const getAllVehiclesFromDB = async (query: Record<string, unknown> = {}) => {
   const vData = await redisService.get("vehicles");
+  let result: IVehicle[];
   if (vData) {
     console.log("from redis.....");
-    return JSON.parse(vData as string);
+    result = JSON.parse(vData as string);
+  } else {
+    console.log("catch missing vehicle data...");
+    result = await Vehicle.find().lean();
+    if (!result) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to get vehicles");
+    }
+    await redisService.post({
+      key: "vehicles",
+      value: JSON.stringify(result),
+      expiration: 60 * 60 * 24, // 24 hours
+    });
   }
-  console.log("catch missing vehicle data...");
-  const result = await Vehicle.find().lean();
-  if (!result) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to get vehicles");
+
+  const searchTerm = readQueryString(query.searchTerm).toLowerCase();
+  const manufacturer = readQueryString(query.manufacturer).toLowerCase();
+  const model = readQueryString(query.model).toLowerCase();
+  const year = readQueryString(query.year);
+
+  if (!searchTerm && !manufacturer && !model && !year) {
+    return result;
   }
-  await redisService.post({
-    key: "vehicles",
-    value: JSON.stringify(result),
-    expiration: 60 * 60 * 24, // 24 hours
+
+  return result.filter((vehicle) => {
+    if (
+      manufacturer &&
+      !vehicle.manufacturer?.toLowerCase().includes(manufacturer)
+    ) {
+      return false;
+    }
+    if (model && !vehicle.model?.toLowerCase().includes(model)) {
+      return false;
+    }
+    if (year && String(vehicle.year) !== year) {
+      return false;
+    }
+    if (!searchTerm) {
+      return true;
+    }
+
+    return (
+      vehicle.manufacturer?.toLowerCase().includes(searchTerm) ||
+      vehicle.model?.toLowerCase().includes(searchTerm) ||
+      String(vehicle.year).includes(searchTerm)
+    );
   });
-  return result;
 };
 
 const getSingleVehicleFromDB = async (id: string) => {

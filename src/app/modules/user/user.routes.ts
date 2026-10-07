@@ -55,7 +55,12 @@ router
     UserController.createUser,
   )
   .patch(
-    auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER, USER_ROLES.USER),
+    auth(
+      USER_ROLES.SUPER_ADMIN,
+      USER_ROLES.DISPATCHER,
+      USER_ROLES.USER,
+      USER_ROLES.DRIVER,
+    ),
     checkDispatcherRoute("/profile"),
     getUploadFields(),
     async (req: Request, _res: Response, next: NextFunction) => {
@@ -81,12 +86,18 @@ router
 // dispatcher
 router
   .route("/dispatcher")
-  .post(auth(USER_ROLES.SUPER_ADMIN), UserController.createDispatcherAsAdmin)
-  .get(auth(USER_ROLES.SUPER_ADMIN), UserController.getAllDispatchers);
+  .post(
+    auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+    UserController.createDispatcherAsAdmin,
+  )
+  .get(
+    auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+    UserController.getAllDispatchers,
+  );
 
 router.patch(
   "/dispatcher/:id/routes",
-  auth(USER_ROLES.SUPER_ADMIN),
+  auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
   validateRequest(UserValidation.updateDispatcherRoutesZodSchema),
   UserController.updateDispatcherRoutes,
 );
@@ -94,16 +105,24 @@ router.patch(
 router
   .route("/drivers")
   .get(
-    auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.USER),
+    auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.USER, USER_ROLES.DISPATCHER),
+    checkDispatcherRoute("/drivers"),
     UserController.getAllDrivers,
   );
 
 router
   .route("/riders")
-  .get(auth(USER_ROLES.SUPER_ADMIN), UserController.getAllRiders);
+  .get(
+    auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+    UserController.getAllRiders,
+  );
 
 router
   .route("/driver-applications")
-  .get(auth(USER_ROLES.SUPER_ADMIN), UserController.getAllDriverApplications);
+  .get(
+    auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+    checkDispatcherRoute("/applications"),
+    UserController.getAllDriverApplications,
+  );
 
 export const UserRoutes = router;

@@ -81,11 +81,29 @@ const updateProfileToDB = async (
 const getAllDriversFromDB = async (
   query: Record<string, any>,
 ): Promise<{ data: Partial<IUser>[]; meta: any }> => {
-  const qb = new QueryBuilder(User.find({ role: USER_ROLES.DRIVER }), query)
-    .filter()
-    .sort()
-    .search(["firstName", "lastName", "middleName", "email", "phone"])
-    .paginate();
+  const { searchTerm, ...restQuery } = query;
+  const term = String(searchTerm ?? "").trim();
+  const filter: Record<string, unknown> = {
+    role: USER_ROLES.DRIVER,
+    isAdminVerifiedDriver: true,
+  };
+
+  if (term) {
+    const words = term
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      .split(/\s+/)
+      .filter(Boolean);
+
+    filter.$and = words.map((word) => ({
+      $or: ["firstName", "lastName", "middleName", "email", "contact"].map(
+        (field) => ({
+          [field]: { $regex: word, $options: "i" },
+        }),
+      ),
+    }));
+  }
+
+  const qb = new QueryBuilder(User.find(filter), restQuery).filter().paginate();
   const [data, meta] = await Promise.all([
     qb.modelQuery.exec(),
     qb.getPaginationInfo(),
