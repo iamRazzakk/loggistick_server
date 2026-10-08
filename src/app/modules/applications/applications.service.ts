@@ -24,7 +24,7 @@ const getAllDriverFromDB = async (query: Record<string, any>) => {
     User.find({
       role: USER_ROLES.DRIVER,
       isAdminVerifiedDriver: true,
-      // applicationStatus: "approved",
+      applicationStatus: "approved",
     }),
     query,
   )

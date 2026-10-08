@@ -136,6 +136,7 @@ const getAllDriverApplicationsFromDB = async (
       verified: true,
       role: USER_ROLES.DRIVER,
       applicationStatus: "pending",
+      isAdminVerifiedDriver: false,
     }),
     query,
   )

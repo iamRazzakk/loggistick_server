@@ -6,17 +6,16 @@ import checkDispatcherRoute from "../../middlewares/checkDispatcherRoute";
 
 const router = express.Router();
 
-router.patch(
-  "/:id",
-  auth(USER_ROLES.SUPER_ADMIN),
-  ApplicationsController.updateDriverApplicationsStatus,
-);
-
 router.get(
   "/drivers",
   auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
   checkDispatcherRoute("/drivers"),
   ApplicationsController.getAllDriver,
+);
+router.patch(
+  "/:id",
+  auth(USER_ROLES.SUPER_ADMIN),
+  ApplicationsController.updateDriverApplicationsStatus,
 );
 
 export const ApplicationsRoutes = router;
