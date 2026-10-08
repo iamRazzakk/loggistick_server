@@ -10,7 +10,8 @@
     "test:watch": "jest --watch",
     "create-module": "ts-node ./src/gen/gm.ts",
     "bench": "node bench/src/ask.js",
-    "bench:booking": "node bench/src/booking.js"
+    "bench:booking": "node bench/src/booking.js",
+    "redis:clear": "docker exec loggistick-redis redis-cli FLUSHDB"
   },
   "author": "Abdur Razzak",
   "license": "ISC",
