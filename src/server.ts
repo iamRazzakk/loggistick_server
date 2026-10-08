@@ -26,9 +26,6 @@ let server: any;
 
 async function main() {
   try {
-    // create super admin
-    seedSuperAdmin();
-
     const redisConnected = await RedisClient.connect();
     if (!redisConnected) {
       throw new ApiError(
@@ -39,6 +36,8 @@ async function main() {
 
     await mongoose.connect(config.database_url as string);
     logger.info(colors.green("🚀 Database connected successfully"));
+
+    await seedSuperAdmin();
 
     const port =
       typeof config.port === "number" ? config.port : Number(config.port);
