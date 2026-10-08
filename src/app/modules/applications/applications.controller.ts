@@ -7,11 +7,11 @@ import sendResponse from "../../../shared/sendResponse";
 const updateDriverApplicationsStatus = catchAsync(
   async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { applicationStatus } = req.body;
+
     const driver =
       await ApplicationsServices.updateDriverApplicationsStatusToDB(
         id,
-        applicationStatus,
+        req.body,
       );
     sendResponse(res, {
       success: true,

@@ -6,11 +6,17 @@ import { USER_ROLES } from "../../../enums/user";
 
 const updateDriverApplicationsStatusToDB = async (
   id: string,
-  applicationStatus: "approved" | "rejected",
+  payload: {
+    applicationStatus: "approved" | "rejected";
+    isAdminVerifiedDriver: boolean;
+  },
 ) => {
   const driver = await User.findByIdAndUpdate(
     id,
-    { applicationStatus },
+    {
+      applicationStatus: payload.applicationStatus,
+      isAdminVerifiedDriver: payload.isAdminVerifiedDriver,
+    },
     { new: true },
   );
   if (!driver) {
