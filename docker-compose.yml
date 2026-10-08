@@ -9,11 +9,12 @@ services:
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      # - DATABASE_URL=mongodb://mongodb:27017/loggistickDB
+      - DATABASE_URL=mongodb://mongodb:27017/loggistickDB
       - BULLMQIP=redis
       - BULLMQPORT=6379
     depends_on:
       - redis
+      - mongodb
     restart: unless-stopped
 
   redis:
@@ -25,15 +26,15 @@ services:
       - redisdata:/data
     restart: unless-stopped
 
-  # mongodb:
-  #   image: mongo:6
-  #   container_name: loggistick-mongodb
-  #   ports:
-  #     - "27017:27017"
-  #   volumes:
-  #     - mongodata:/data/db
-  #   restart: unless-stopped
+  mongodb:
+    image: mongo:6
+    container_name: loggistick-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodata:/data/db
+    restart: unless-stopped
 
 volumes:
   redisdata:
-  # mongodata:
+  mongodata:
