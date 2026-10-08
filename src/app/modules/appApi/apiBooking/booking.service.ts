@@ -112,15 +112,24 @@ const getRecentActivityFromDB = async (user: JwtPayload) => {
 };
 
 const getDriverOverviewDataFromDB = async (user: JwtPayload) => {
-  const totalTrips = await Booking.countDocuments({
-    driverId: new Types.ObjectId(user.id),
-  }).lean();
-  const totalCompletedTrips = await Booking.countDocuments({
-    driverId: new Types.ObjectId(user.id),
-    bookingStatus: "completed",
-  }).lean();
-  // TODO::: get total earnings
-  const totalEarnings = 0;
+  const [totalTrips, totalCompletedTrips, totalEarningsAmount] =
+    await Promise.all([
+      Booking.countDocuments({
+        driverId: new Types.ObjectId(user.id),
+      }).lean(),
+      Booking.countDocuments({
+        driverId: new Types.ObjectId(user.id),
+        bookingStatus: "completed",
+      }).lean(),
+      Booking.find({
+        bookingStatus: "completed",
+        driverId: new Types.ObjectId(user.id),
+      })
+        .select("price")
+        .lean(),
+    ]);
+  const totalEarnings =
+    totalEarningsAmount?.reduce((sum, row) => sum + (row?.price ?? 0), 0) ?? 0;
   return { totalTrips, totalCompletedTrips, totalEarnings };
 };
 
