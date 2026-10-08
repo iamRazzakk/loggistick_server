@@ -129,7 +129,6 @@ const userSchema = new Schema<IUser, UserModal>(
     publicId: {
       type: String,
       required: false,
-      unique: true,
     },
     location: {
       type: String,
