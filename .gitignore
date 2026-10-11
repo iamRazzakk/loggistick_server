@@ -2,7 +2,6 @@ node_modules
 bench/results/
 uploads
 /winston
-.env
 dist
 SECURITY.md
 *.txt
@@ -15,3 +14,4 @@ geoFence
 
 
 docs*
+config.bat

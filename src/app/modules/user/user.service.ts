@@ -250,6 +250,33 @@ const updateDispatcherRoutesIntoDB = async (
   return dispatcher;
 };
 
+const createDriverAsAdminIntoDB = async (payload: IUser) => {
+  payload.verified = true;
+  payload.isAdminVerifiedDriver = true;
+  payload.applicationStatus = "approved";
+  const result = await User.create(payload);
+  if (!result) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to create driver");
+  }
+  // send email
+  const createAccountTemplate = emailTemplate.driverCreated({
+    email: result.email!,
+    password: payload.password!,
+    firstName: result.firstName,
+    lastName: result.lastName,
+    middleName: result.middleName ?? "",
+  });
+  const emailData = {
+    jobId: randomUUID(),
+    to: createAccountTemplate.to,
+    subject: createAccountTemplate.subject,
+    html: createAccountTemplate.html,
+    type: "create_account",
+  };
+  await emailQueue.add("send-email", emailData);
+  return result;
+};
+
 export const UserService = {
   createUserToDB,
   getUserProfileFromDB,
@@ -260,4 +287,5 @@ export const UserService = {
   createDispatcherAsAdminIntoDB,
   updateDispatcherRoutesIntoDB,
   getAllDispatchersFromDB,
+  createDriverAsAdminIntoDB,
 };

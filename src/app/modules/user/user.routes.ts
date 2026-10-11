@@ -6,11 +6,13 @@ import checkDispatcherRoute from "../../middlewares/checkDispatcherRoute";
 import validateRequest from "../../middlewares/validateRequest";
 import { UserValidation } from "./user.validation";
 import {
+  getMultipleFilePaths,
   getSingleFilePath,
   getUploadFields,
 } from "../../middlewares/fileUploaderHandlar";
 import { parseRequestBody } from "../../middlewares/parseBody";
 import { parseBody } from "../../../util/parse";
+import { fileUploadHandler } from "../../../shared/fileUploadHandler";
 
 const router = express.Router();
 
@@ -100,6 +102,33 @@ router.patch(
   auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
   validateRequest(UserValidation.updateDispatcherRoutesZodSchema),
   UserController.updateDispatcherRoutes,
+);
+router.route("/driver").post(
+  getUploadFields(),
+  auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+  async (req: Request, _res: Response, next: NextFunction) => {
+    try {
+      const data = parseBody<Record<string, any>>(req.body);
+
+      const licenseImage = getMultipleFilePaths(
+        req.files as Record<string, Express.Multer.File[]>,
+        "driverData[licenseImage]",
+      );
+
+      if (licenseImage.length) {
+        data.driverData = {
+          ...(data.driverData || []),
+          licenseImage,
+        };
+      }
+
+      req.body = data;
+      next();
+    } catch (error) {
+      next(error);
+    }
+  },
+  UserController.createDriverAsAdmin,
 );
 
 router

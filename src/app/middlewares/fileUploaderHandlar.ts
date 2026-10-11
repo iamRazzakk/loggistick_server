@@ -25,6 +25,12 @@ const UPLOAD_CONFIG: Record<string, UploadConfigItem> = {
     maxCount: 3,
     maxSize: 20 * 1024 * 1024, // 20MB
   },
+  "driverData[licenseImage]": {
+    folder: "image",
+    allowedMimeTypes: ["image/jpeg", "image/png", "image/jpg"],
+    maxCount: 3,
+    maxSize: 20 * 1024 * 1024,
+  },
   doc: {
     folder: "docs",
     allowedMimeTypes: [
@@ -165,3 +171,16 @@ export const getSingleFilePath = (
   return undefined;
 };
 
+// get multiple file paths
+export const getMultipleFilePaths = (
+  files: Record<string, Express.Multer.File[]>,
+  folder: IFolderName,
+) => {
+  const fieldFiles = files?.[folder];
+  if (fieldFiles && fieldFiles.length > 0) {
+    return fieldFiles.map(
+      (file) => `/${UPLOAD_CONFIG[folder].folder}/${file.filename}`,
+    );
+  }
+  return [];
+};

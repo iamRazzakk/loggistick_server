@@ -22,7 +22,6 @@ const createUser = catchAsync(
 // create dispatcher as admin
 const createDispatcherAsAdmin = catchAsync(
   async (req: Request, res: Response) => {
-    console.log("req.body e::", req.body);
     const result = await UserService.createDispatcherAsAdminIntoDB(req.body);
     sendResponse(res, {
       success: true,
@@ -127,6 +126,17 @@ const getAllDriverApplications = catchAsync(
   },
 );
 
+// create driver as admin
+const createDriverAsAdmin = catchAsync(async (req: Request, res: Response) => {
+  const result = await UserService.createDriverAsAdminIntoDB(req.body);
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.CREATED,
+    message: "Driver created successfully",
+    data: result,
+  });
+});
+
 export const UserController = {
   createUser,
   getUserProfile,
@@ -137,4 +147,5 @@ export const UserController = {
   createDispatcherAsAdmin,
   updateDispatcherRoutes,
   getAllDispatchers,
+  createDriverAsAdmin,
 };
