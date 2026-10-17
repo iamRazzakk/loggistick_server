@@ -27,7 +27,7 @@ export interface ICounty {
   per_mile_price?: number;
 
   // mileage based price
-  mileage_based_price?: IMileageBasedPrice;
+  mileage_based_price?: IMileageBasedPrice[];
 
   insidePrice?: number;
   outsidePrice?: number;

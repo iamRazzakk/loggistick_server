@@ -52,10 +52,7 @@ const countySchema = new Schema<ICounty>(
     first_miles_price: { type: Number },
     per_mile_price: { type: Number },
 
-    // mileage_based (single object — interface onujayi)
-    mileage_based_price: {
-      type: mileageBasedPriceSchema,
-    },
+    mileage_based_price: { type: [mileageBasedPriceSchema], default: [] },
 
     insidePrice: { type: Number },
     outsidePrice: { type: Number },
