@@ -72,7 +72,8 @@ export type IBooking = {
     | "confirmed"
     | "cancelled"
     | "trip-completed"
-    | "completed";
+    | "completed"
+    | "onboard";
   recurringBatchId?: string;
   price?: number;
   isApproved?: "pending" | "approved" | "rejected";

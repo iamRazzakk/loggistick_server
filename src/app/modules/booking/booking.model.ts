@@ -122,6 +122,7 @@ const bookingSchema = new Schema<IBooking, BookingModel>(
         "cancelled",
         "trip-completed",
         "completed",
+        "onboard",
       ],
       required: true,
       default: "pending",
