@@ -24,7 +24,9 @@ const createRecurringBookings = async (job: Job) => {
 
   try {
     if (!payload) {
-      throw new UnrecoverableError("Booking data is missing. Please try again.");
+      throw new UnrecoverableError(
+        "Booking data is missing. Please try again.",
+      );
     }
 
     if (!Array.isArray(dates) || dates.length === 0) {
@@ -33,15 +35,26 @@ const createRecurringBookings = async (job: Job) => {
       );
     }
 
+    /**
+     * PREVIOUS IMPLEMENTATION
+     * new Types.ObjectId(payload.payerSource) || null
+     * ObjectId is always truthy, and ObjectId(null) throws.
+     * appointmentTime was copied as-is, which is still correct:
+     * each occurrence changes serviceDate only.
+     */
     const bookings = dates.map((date) => ({
       ...payload,
       serviceDate: date,
-      bookingStatus: "pending",
+      bookingStatus: payload.bookingStatus ?? "pending",
       recurringBatchId,
       userId: new Types.ObjectId(payload.userId),
       mobilityRequirements: new Types.ObjectId(payload.mobilityRequirements),
-      payerSource: new Types.ObjectId(payload.payerSource) || null,
-      driverId: new Types.ObjectId(payload.driverId) || null,
+      payerSource: payload.payerSource
+        ? new Types.ObjectId(payload.payerSource)
+        : undefined,
+      driverId: payload.driverId
+        ? new Types.ObjectId(payload.driverId)
+        : undefined,
     }));
 
     const created = [];
@@ -106,4 +119,3 @@ bookingWorker.on("failed", (job, err) => {
     `❌ Job ${job?.id?.slice(0, 4)} has failed with error: ${err.message}`,
   );
 });
-

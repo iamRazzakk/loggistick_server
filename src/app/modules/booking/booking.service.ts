@@ -18,6 +18,7 @@ import {
 import { User } from "../user/user.model";
 import { USER_ROLES } from "../../../enums/user";
 import {
+  applyServerFare,
   getTripPrice,
   handlePayment,
   toBookingErrorMessage,
@@ -26,19 +27,33 @@ import {
   sendNotifications,
   sendPushNotification,
 } from "../../../helpers/notificationsHelper";
-import stripe from "../../../config/stripe";
+
 import { Driverrating } from "../driverrating/driverrating.model";
 import {
   buildPendingBookingFilter,
   buildTripHistoryFilter,
 } from "./booking.query";
+import { LOCKED_FARE_FIELDS } from "./booking.constant";
+import { pickupAppointmentError } from "../appApi/apiBooking/booking.helper";
 
 const JOB_WAIT_MS = 120_000;
 
 const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
-  const isAdmin = await User.findById({ _id: user.id }).select("role");
-  if (isAdmin?.role === USER_ROLES.SUPER_ADMIN) {
+  // remove locked fare fields from payload
+  for (const key of LOCKED_FARE_FIELDS) {
+    delete payload[key];
+  }
+
+  const timeError = pickupAppointmentError(
+    payload.pickupTime,
+    payload.appointmentTime,
+  );
+  if (timeError) throw new ApiError(StatusCodes.BAD_REQUEST, timeError);
+  const actor = await User.findById(user.id).select("role");
+
+  if (actor?.role === USER_ROLES.SUPER_ADMIN) {
     payload.isApproved = "approved";
+    payload.bookingStatus = payload.driverId ? "assigned" : "confirmed";
     if (payload.driverId) {
       await sendNotifications({
         receiver: payload.driverId,
@@ -51,15 +66,11 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
     }
   } else {
     payload.isApproved = "pending";
-  }
-  if (payload.userId) {
-    payload.userId = new Types.ObjectId(payload.userId);
-  } else {
-    payload.userId = new Types.ObjectId(user.id);
+    payload.bookingStatus = "pending";
+    delete payload.driverId;
   }
 
-  payload.bookingStatus = "pending";
-
+  payload.userId = new Types.ObjectId(payload.userId ?? user.id);
   const quote = await getTripPrice({
     pickup: payload.pickupLocation as [number, number],
     dropoff: payload.dropOffLocation as [number, number],
@@ -70,6 +81,8 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
     tripType: payload.tripType,
     mobilityRequirements: payload.mobilityRequirements?.toString(),
   });
+  applyServerFare(payload, quote);
+
   payload.price = quote.totalPrice;
 
   if (!payload.recurringBooking) {
@@ -131,10 +144,18 @@ const getAllMyBookingsFromDB = async (
   user: JwtPayload,
   query: Record<string, any>,
 ) => {
+  const id = new Types.ObjectId(user.id);
+  const mine =
+    user.role === USER_ROLES.USER
+      ? { userId: id }
+      : user.role === USER_ROLES.DRIVER
+        ? { driverId: id }
+        : { $or: [{ userId: id }, { driverId: id }] };
+
   const qb = new QueryBuilder(
     // need to check user or driver id
     Booking.find({
-      driverId: new Types.ObjectId(user.id),
+      ...mine,
     }),
     query,
   )
@@ -369,7 +390,7 @@ const updateBookingInDB = async (
 };
 
 // get booking by id
-const getBookingByIdFromDB = async (id: string) => {
+const getBookingByIdFromDB = async (id: string, user: JwtPayload) => {
   const booking = await Booking.findById(id)
     .populate({
       path: "driverId",

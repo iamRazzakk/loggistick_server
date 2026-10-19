@@ -104,7 +104,11 @@ const updateBooking = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getBookingById = catchAsync(async (req: Request, res: Response) => {
-  const booking = await BookingServices.getBookingByIdFromDB(req.params.id);
+  const booking = await BookingServices.getBookingByIdFromDB(
+    req.params.id,
+    req.user,
+  );
+
   sendResponse(res, {
     statusCode: StatusCodes.OK,
     success: true,

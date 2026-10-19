@@ -1,10 +1,6 @@
 import { Schema, model } from "mongoose";
-import {
-  AppointmentType,
-  BookingModel,
-  County,
-  IBooking,
-} from "./booking.interface";
+import { BookingModel, IBooking } from "./booking.interface";
+import { AppointmentType } from "../../../enums/AppointmentType";
 
 const bookingSchema = new Schema<IBooking, BookingModel>(
   {
@@ -122,7 +118,6 @@ const bookingSchema = new Schema<IBooking, BookingModel>(
         "cancelled",
         "trip-completed",
         "completed",
-        "onboard",
       ],
       required: true,
       default: "pending",
@@ -153,6 +148,25 @@ const bookingSchema = new Schema<IBooking, BookingModel>(
       type: Schema.Types.ObjectId,
       ref: "User",
       required: false,
+    },
+    stripeCheckoutSessionId: {
+      type: String,
+      required: false,
+    },
+    organizationContribution: {
+      type: Number,
+      required: false,
+      default: 0,
+    },
+    passengerCoPay: {
+      type: Number,
+      required: false,
+      default: 0,
+    },
+    totalPrice: {
+      type: Number,
+      required: false,
+      default: 0,
     },
   },
   {
