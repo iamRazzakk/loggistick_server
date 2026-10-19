@@ -1,27 +1,12 @@
 import { z } from "zod";
-import { AppointmentType } from "./booking.interface";
 import { checkValidID } from "../../../shared/checkValidID";
-
-const WEEKDAYS = [
-  "saturday",
-  "sunday",
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-] as const;
+import { AppointmentType } from "../../../enums/AppointmentType";
+import { WEEKDAYS } from "./booking.constant";
+import { BOOKING_STATUSES } from "./booking.constant";
+import { pickupAppointmentError } from "../appApi/apiBooking/booking.helper";
 
 const TRIP_TYPES = ["one-way", "round-trip"] as const;
-const BOOKING_STATUSES = [
-  "pending",
-  "assigned",
-  "in-progress",
-  "confirmed",
-  "cancelled",
-  "trip-completed",
-  "completed",
-] as const;
+
 const APPOINTMENT_TYPES = Object.values(AppointmentType) as [
   AppointmentType,
   ...AppointmentType[],
@@ -95,6 +80,17 @@ const bookingBodyRefine = (
       message: "Return time is required when trip type is round-trip",
     });
   }
+  const timeError = pickupAppointmentError(
+    data.pickupTime,
+    data.appointmentTime,
+  );
+  if (timeError) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["pickupTime"],
+      message: timeError,
+    });
+  }
 
   if (data.recurringBooking) {
     if (!data.selectedDate || data.selectedDate.length === 0) {
@@ -120,7 +116,19 @@ const createBookingZodSchema = z.object({
 });
 
 const updateBookingZodSchema = z.object({
-  body: bookingBodySchema.partial(),
+  body: bookingBodySchema.partial().superRefine((data, ctx) => {
+    if (!data.pickupTime || !data.appointmentTime) return;
+    const timeError = pickupAppointmentError(
+      data.pickupTime,
+      data.appointmentTime,
+    );
+    if (!timeError) return;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["pickupTime"],
+      message: timeError,
+    });
+  }),
 });
 
 export const BookingValidations = {

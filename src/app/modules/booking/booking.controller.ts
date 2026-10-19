@@ -104,7 +104,11 @@ const updateBooking = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getBookingById = catchAsync(async (req: Request, res: Response) => {
-  const booking = await BookingServices.getBookingByIdFromDB(req.params.id);
+  const booking = await BookingServices.getBookingByIdFromDB(
+    req.params.id,
+    req.user,
+  );
+
   sendResponse(res, {
     statusCode: StatusCodes.OK,
     success: true,
@@ -139,13 +143,20 @@ const getSingleRiderBookingHistory = catchAsync(
 
 const calculateTotalTripPrice = catchAsync(
   async (req: Request, res: Response) => {
+    const pickup = req.body.pickup ?? req.body.pickupLocation;
+    const dropoff = req.body.dropoff ?? req.body.dropOffLocation;
+    const stop = req.body.stop ?? req.body.stopAddress;
+    const payerId = req.body.payerId ?? req.body.payerSource;
+    const tripType = req.body.tripType ?? "one-way";
+    const mobilityRequirements = req.body.mobilityRequirements;
+
     const price = await BookingServices.calculateTotalTripPrice(
-      req.body.pickup,
-      req.body.dropoff,
-      req.body.stop,
-      req.body.payerId,
-      req.body.tripType,
-      req.body.mobilityRequirements,
+      pickup,
+      dropoff,
+      stop,
+      payerId,
+      tripType,
+      mobilityRequirements,
     );
     sendResponse(res, {
       statusCode: StatusCodes.OK,

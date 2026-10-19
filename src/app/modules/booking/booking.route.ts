@@ -86,7 +86,10 @@ router
 // calculate total trip price
 router
   .route("/calculate-price")
-  .post(BookingController.calculateTotalTripPrice);
+  .post(
+    auth(USER_ROLES.DISPATCHER, USER_ROLES.SUPER_ADMIN, USER_ROLES.USER),
+    BookingController.calculateTotalTripPrice,
+  );
 router
   .route("/:id")
   .get(

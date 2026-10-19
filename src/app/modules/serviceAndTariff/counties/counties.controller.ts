@@ -49,7 +49,6 @@ const getSingleCounty = catchAsync(async (req: Request, res: Response) => {
 
 const updateCounties = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
-  console.log("====>>req.body", req.body);
   const result = await CountiesService.updateCountiesFromDB(id, req.body);
   sendResponse(res, {
     statusCode: StatusCodes.OK,

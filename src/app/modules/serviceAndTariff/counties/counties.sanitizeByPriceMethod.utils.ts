@@ -32,14 +32,47 @@ const toNumber = (value: unknown): number | undefined => {
   return Number.isNaN(n) ? undefined : n;
 };
 
+const parseBandItem = (item: unknown): IMileageBasedPrice | null => {
+  if (!item) return null;
+  let parsed = item;
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return null;
+    }
+  }
+  if (typeof parsed !== "object" || parsed === null) return null;
+
+  const obj = parsed as Record<string, unknown>;
+  const starting_mileage = toNumber(obj.starting_mileage);
+  const first_miles_price = toNumber(obj.first_miles_price);
+  const per_mile_price = toNumber(obj.per_mile_price);
+
+  if (
+    starting_mileage != null &&
+    first_miles_price != null &&
+    per_mile_price != null &&
+    !Number.isNaN(starting_mileage) &&
+    !Number.isNaN(first_miles_price) &&
+    !Number.isNaN(per_mile_price)
+  ) {
+    return { starting_mileage, first_miles_price, per_mile_price };
+  }
+  return null;
+};
+
 /**
  * Build mileage_based_price from:
- * 1) already-parsed object / JSON
- * 2) OR flat FormData keys: starting_mileage, first_miles_price, per_mile_price
+ * 1) already-parsed array of objects / JSON string array
+ * 2) already-parsed single object / JSON string object
+ * 3) OR flat FormData keys: starting_mileage, first_miles_price, per_mile_price
+ *
+ * Always returns a sorted array of IMileageBasedPrice[] (or undefined if none valid)
  */
 const buildMileageBasedPrice = (
   body: Record<string, unknown>,
-): IMileageBasedPrice | undefined => {
+): IMileageBasedPrice[] | undefined => {
   let raw = body.mileage_based_price;
 
   if (typeof raw === "string") {
@@ -50,22 +83,28 @@ const buildMileageBasedPrice = (
     }
   }
 
-  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-    const obj = raw as Record<string, unknown>;
-    const starting_mileage = toNumber(obj.starting_mileage);
-    const first_miles_price = toNumber(obj.first_miles_price);
-    const per_mile_price = toNumber(obj.per_mile_price);
-
-    if (
-      starting_mileage != null &&
-      first_miles_price != null &&
-      per_mile_price != null
-    ) {
-      return { starting_mileage, first_miles_price, per_mile_price };
+  // 1) Array format (e.g. from JSON payload or stringified JSON array in FormData)
+  if (Array.isArray(raw)) {
+    const bands: IMileageBasedPrice[] = [];
+    for (const item of raw) {
+      const parsed = parseBandItem(item);
+      if (parsed) {
+        bands.push(parsed);
+      }
+    }
+    if (bands.length > 0) {
+      // Sort ascending by starting_mileage for consistency
+      return bands.sort((a, b) => a.starting_mileage - b.starting_mileage);
     }
   }
 
-  // Flat FormData fallback (frontend sends separate keys, no nested object)
+  // 2) Single object format
+  const single = parseBandItem(raw);
+  if (single) {
+    return [single];
+  }
+
+  // 3) Flat FormData fallback (frontend sends separate keys, no nested object)
   const starting_mileage = toNumber(body.starting_mileage);
   const first_miles_price = toNumber(body.first_miles_price);
   const per_mile_price = toNumber(body.per_mile_price);
@@ -75,7 +114,7 @@ const buildMileageBasedPrice = (
     first_miles_price != null &&
     per_mile_price != null
   ) {
-    return { starting_mileage, first_miles_price, per_mile_price };
+    return [{ starting_mileage, first_miles_price, per_mile_price }];
   }
 
   return undefined;
@@ -107,7 +146,17 @@ export const sanitizeCountyPayloadByPriceMethod = (
   if (!priceMethod) {
     const cleaned = { ...body };
     delete cleaned.starting_mileage;
+    delete cleaned.first_miles_price;
+    delete cleaned.per_mile_price;
     delete cleaned.data;
+
+    if (cleaned.mileage_based_price !== undefined) {
+      const mileage = buildMileageBasedPrice(body);
+      if (mileage) {
+        cleaned.mileage_based_price = mileage;
+      }
+    }
+
     return cleaned;
   }
 

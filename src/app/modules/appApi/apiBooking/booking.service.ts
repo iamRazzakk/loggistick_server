@@ -129,7 +129,10 @@ const getDriverOverviewDataFromDB = async (user: JwtPayload) => {
         .lean(),
     ]);
   const totalEarnings =
-    totalEarningsAmount?.reduce((sum, row) => sum + (row?.price ?? 0), 0) ?? 0;
+    totalEarningsAmount?.reduce(
+      (sum, row) => sum + (row?.passengerCoPay ?? row?.price ?? 0),
+      0,
+    ) ?? 0;
   return { totalTrips, totalCompletedTrips, totalEarnings };
 };
 
