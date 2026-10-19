@@ -1,17 +1,30 @@
 import { z } from "zod";
 import { checkValidID } from "../../../../shared/checkValidID";
 
-const mileageBasedPriceZodSchema = z.object({
-  starting_mileage: z.coerce.number({
-    required_error: "Starting mileage is required",
-  }),
-  first_miles_price: z.coerce.number({
-    required_error: "First miles price is required",
-  }),
-  per_mile_price: z.coerce.number({
-    required_error: "Per mile price is required",
-  }),
+const mileageBasedPriceItemSchema = z.object({
+  starting_mileage: z.coerce
+    .number({
+      required_error: "Starting mileage is required",
+    })
+    .min(0, "Starting mileage must be 0 or greater"),
+  first_miles_price: z.coerce
+    .number({
+      required_error: "First miles price is required",
+    })
+    .min(0, "First miles price must be 0 or greater"),
+  per_mile_price: z.coerce
+    .number({
+      required_error: "Per mile price is required",
+    })
+    .min(0, "Per mile price must be 0 or greater"),
 });
+
+const mileageBasedPriceZodSchema = z.union([
+  z
+    .array(mileageBasedPriceItemSchema)
+    .nonempty("At least one mileage band is required"),
+  mileageBasedPriceItemSchema.transform((item) => [item]),
+]);
 
 const coversAreasGeoJSONZodSchema = z.object({
   type: z.enum(["Polygon", "MultiPolygon"], {
@@ -79,13 +92,19 @@ const priceMethodRefine = (
     }
   }
 
-  if (data.priceMethod === "mileage_based" && data.mileage_based_price == null) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["mileage_based_price"],
-      message:
-        "mileage_based_price is required when priceMethod is mileage_based",
-    });
+  if (data.priceMethod === "mileage_based") {
+    if (
+      !data.mileage_based_price ||
+      (Array.isArray(data.mileage_based_price) &&
+        data.mileage_based_price.length === 0)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["mileage_based_price"],
+        message:
+          "mileage_based_price is required when priceMethod is mileage_based",
+      });
+    }
   }
 };
 

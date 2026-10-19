@@ -97,15 +97,12 @@ const mileageBands = (
 };
 
 /**
- * PREVIOUS IMPLEMENTATION
- * Read mileage_based_price as one object. The schema stores an array,
- * so starting_mileage was undefined and the fare became NaN.
- *
- * NEW IMPLEMENTATION
- * Use the band with the greatest starting_mileage that is still <= miles.
- * Bands are sorted once per quote. A county has a handful of bands,
- * so this stays cheap even when recurring creation calls the quote once
- * and copies it onto hundreds of rows.
+ * Tier matching implementation for mileage_based price method:
+ * 1) Bands are sorted ascending by starting_mileage (e.g. 20, 25, 30, 35).
+ * 2) Match the tier where miles fall into (e.g. miles <= 20 uses Band 1; 20-25 uses Band 2, etc.)
+ *    and charge that tier's first_miles_price.
+ * 3) If miles exceed all defined tiers (e.g. miles > 35), use the highest tier's
+ *    first_miles_price plus extra miles charged at that tier's per_mile_price.
  */
 const priceMileageBand = (county: ICounty, miles: number) => {
   const bands = mileageBands(county.mileage_based_price).sort(
@@ -117,12 +114,18 @@ const priceMileageBand = (county: ICounty, miles: number) => {
       "Mileage bands are missing for the pickup county",
     );
   }
-  let band = bands[0];
-  for (const candidate of bands) {
-    if (candidate.starting_mileage <= miles) band = candidate;
+
+  // 1) Match the tier where miles fall into
+  for (const band of bands) {
+    if (miles <= band.starting_mileage) {
+      return band.first_miles_price;
+    }
   }
-  const extraMiles = Math.max(0, miles - band.starting_mileage);
-  return band.first_miles_price + extraMiles * band.per_mile_price;
+
+  // 2) If miles exceed all defined tiers, charge extra miles at highest tier's per_mile_price
+  const highestBand = bands[bands.length - 1];
+  const extraMiles = Math.max(0, miles - highestBand.starting_mileage);
+  return highestBand.first_miles_price + extraMiles * highestBand.per_mile_price;
 };
 
 const priceByMethod = (county: ICounty, miles: number) => {

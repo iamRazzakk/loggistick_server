@@ -66,6 +66,7 @@ export const parseCountyUpload = (
   _res: Response,
   next: NextFunction,
 ) => {
+
   try {
     // FormData: whole payload as JSON string in `data`
     if (typeof req.body.data === "string") {
@@ -84,7 +85,23 @@ export const parseCountyUpload = (
       req.body[field] = coerceNumber(req.body[field]);
     }
 
-    if (req.body.mileage_based_price && typeof req.body.mileage_based_price === "object") {
+    if (Array.isArray(req.body.mileage_based_price)) {
+      req.body.mileage_based_price = req.body.mileage_based_price.map(
+        (item: any) => {
+          if (item && typeof item === "object") {
+            return {
+              starting_mileage: coerceNumber(item.starting_mileage),
+              first_miles_price: coerceNumber(item.first_miles_price),
+              per_mile_price: coerceNumber(item.per_mile_price),
+            };
+          }
+          return item;
+        },
+      );
+    } else if (
+      req.body.mileage_based_price &&
+      typeof req.body.mileage_based_price === "object"
+    ) {
       const mileage = req.body.mileage_based_price as Record<string, unknown>;
       mileage.starting_mileage = coerceNumber(mileage.starting_mileage);
       mileage.first_miles_price = coerceNumber(mileage.first_miles_price);
@@ -95,7 +112,9 @@ export const parseCountyUpload = (
     req.body.isActive = coerceBoolean(req.body.isActive);
 
     // GeoJSON file upload (field: file | doc)
-    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+    const files = req.files as
+      | Record<string, Express.Multer.File[]>
+      | undefined;
     const uploadedFile = files?.file?.[0] || files?.doc?.[0];
 
     if (uploadedFile) {
