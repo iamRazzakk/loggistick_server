@@ -147,6 +147,11 @@ const userSchema = new Schema<IUser, UserModal>(
       required: false,
       default: null,
     },
+    isPushNotificationEnabled: {
+      type: Boolean,
+      required: false,
+      default: true,
+    },
   },
   {
     timestamps: true,
