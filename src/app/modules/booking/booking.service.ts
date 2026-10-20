@@ -78,6 +78,8 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
       ? (payload.stopAddress as [number, number])
       : undefined,
     payerId: payload.payerSource?.toString(),
+    countyId: (payload as IBooking & { countyId?: string }).countyId?.toString(),
+    userId: user.id,
     tripType: payload.tripType,
     mobilityRequirements: payload.mobilityRequirements?.toString(),
   });
@@ -485,12 +487,16 @@ const calculateTotalTripPrice = async (
   payerId?: string,
   tripType: "one-way" | "round-trip" = "one-way",
   mobilityRequirements?: string,
+  countyId?: string,
+  userId?: string,
 ) => {
   return await getTripPrice({
     pickup: pickupLocation,
     dropoff: dropoffLocation,
     stop: stopAddress,
     payerId,
+    countyId,
+    userId,
     tripType,
     mobilityRequirements,
   });

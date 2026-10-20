@@ -120,6 +120,15 @@ const getAllRidersFromDB = async (
     .sort()
     .search(["firstName", "lastName", "middleName", "email", "contact"])
     .paginate();
+  qb.modelQuery = qb.modelQuery.populate({
+    path: "county",
+    select: "payersId",
+    populate: {
+      path: "payersId",
+      select: "name type isActive",
+    },
+  });
+
   const [data, meta] = await Promise.all([
     qb.modelQuery.exec(),
     qb.getPaginationInfo(),
