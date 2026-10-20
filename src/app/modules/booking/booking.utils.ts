@@ -275,7 +275,10 @@ export const getTripPrice = async (input: {
     );
   }
 
-  const dropoffInside = await countyCoversPoint(pickupCounty._id, input.dropoff);
+  const dropoffInside = await countyCoversPoint(
+    pickupCounty._id,
+    input.dropoff,
+  );
   const stopInside = input.stop
     ? await countyCoversPoint(pickupCounty._id, input.stop)
     : true;
@@ -357,7 +360,7 @@ export const handlePayment = async (id: string) => {
     "price passengerCoPay userId bookingStatus paymentStatus stripeCheckoutSessionId",
   );
   if (!existing) throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
-  if (existing.bookingStatus !== "completed") {
+  if (existing.bookingStatus !== "trip-completed") {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
       "Co-pay can be collected only after the passenger is completed the trip",

@@ -6,9 +6,10 @@ import { StatusCodes } from "http-status-codes";
 
 const createPushNotification = catchAsync(
   async (req: Request, res: Response) => {
-    const { body } = req;
-    const result =
-      await PushNotificationServices.createPushNotificationIntoDB(body);
+    const result = await PushNotificationServices.createPushNotificationIntoDB(
+      req.body,
+      req.user,
+    );
     sendResponse(res, {
       success: true,
       message: "Push notification created successfully",

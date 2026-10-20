@@ -5,8 +5,13 @@ import { PushNotification } from "./push_notification.model";
 import QueryBuilder from "../../builder/queryBuilder";
 import { User } from "../user/user.model";
 import { FirebaseHelperFMC } from "../../../helpers/firebaseHelperFMC";
+import { sendNotifications } from "../../../helpers/notificationsHelper";
+import { JwtPayload } from "jsonwebtoken";
 
-const createPushNotificationIntoDB = async (payload: IPushNotification) => {
+const createPushNotificationIntoDB = async (
+  payload: IPushNotification,
+  user: JwtPayload,
+) => {
   const data = await PushNotification.create(payload);
   if (!data) {
     throw new ApiError(
@@ -15,16 +20,16 @@ const createPushNotificationIntoDB = async (payload: IPushNotification) => {
     );
   }
 
+  const sender = await User.findById(user.id).select("_id");
+
   const users = await User.find({
     role: payload.role,
-    isBanned: false,
-    fcmToken: { $exists: true, $nin: [null, ""] },
-  }).select("fcmToken");
+    isBanned: { $ne: true },
+  }).select("_id");
 
-  const tokens = users
+  users
     .map((user) => user.fcmToken)
     .filter((token): token is string => Boolean(token));
-
   // if (tokens.length) {
   //   await FirebaseHelperFMC.sendNotificationToUsers({
   //     tokens,
