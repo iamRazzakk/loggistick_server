@@ -36,12 +36,12 @@ router
     async (req: Request, _res: Response, next: NextFunction) => {
       try {
         const data = req.body;
-        const licenseImage = getSingleFilePath(
+        const licenseImage = getMultipleFilePaths(
           req.files as Record<string, Express.Multer.File[]>,
           "image",
         );
 
-        if (licenseImage) {
+        if (licenseImage.length) {
           req.body.driverData = {
             ...req.body.driverData,
             licenseImage,

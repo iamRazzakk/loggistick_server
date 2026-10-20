@@ -23,12 +23,16 @@ const notificationSchema = new Schema<INotification, NotificationModel>(
     },
     screen: {
       type: String,
-      enum: ["booking", "chat"],
+      enum: ["booking", "chat", "push_notification"],
       required: false,
     },
     read: {
       type: Boolean,
       default: false,
+    },
+    description: {
+      type: String,
+      required: false,
     },
     type: {
       type: String,

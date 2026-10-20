@@ -18,6 +18,12 @@ const getNotificationsFromDB = async (
 ) => {
   const qb = new QueryBuilder(Notification.find({ receiver: user.id }), query)
     .paginate()
+    // firstName: string;
+    // middleName?: string;
+    // lastName: string;
+    .populate(["sender"], {
+      sender: `{firstName: 1, middleName: 1, lastName: 1}`,
+    })
     .sort();
 
   const [data, meta] = await Promise.all([

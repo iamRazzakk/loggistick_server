@@ -22,6 +22,10 @@ const updateDriverApplicationsStatusToDB = async (
   if (!driver) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Driver not found");
   }
+  // TODO: need to send the email to the driver
+
+
+  
   return driver;
 };
 

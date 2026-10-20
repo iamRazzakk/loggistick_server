@@ -63,6 +63,8 @@ const toMoney = (value: number) => {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 };
 
+type PricingCounty = { _id: Types.ObjectId } & ICounty;
+
 const findCountyForPoint = (point: LngLat, payerId?: string) => {
   const filter: Record<string, unknown> = {
     isActive: true,
@@ -75,13 +77,61 @@ const findCountyForPoint = (point: LngLat, payerId?: string) => {
   if (payerId && Types.ObjectId.isValid(payerId)) {
     filter.payersId = new Types.ObjectId(payerId);
   }
-  return County.findOne(filter).lean<{ _id: Types.ObjectId } & ICounty>();
+  return County.findOne(filter).lean<PricingCounty>();
 };
 
-const sameCounty = (
-  a?: { _id?: Types.ObjectId } | null,
-  b?: { _id?: Types.ObjectId } | null,
-) => Boolean(a?._id && b?._id && String(a._id) === String(b._id));
+const loadActiveCounty = (countyId: string) =>
+  County.findOne({
+    _id: new Types.ObjectId(countyId),
+    isActive: true,
+  }).lean<PricingCounty>();
+
+/**
+ * countyId, when sent, selects the tariff.
+ * Otherwise the authenticated user id (JWT) is used to read User.county.
+ * The body is never trusted for that user id.
+ * Geo lookup stays only when neither id resolves a county.
+ */
+const resolvePickupCounty = async (input: {
+  pickup: LngLat;
+  payerId?: string;
+  countyId?: string;
+  userId?: string;
+}) => {
+  let countyId = input.countyId;
+  if (
+    (!countyId || !Types.ObjectId.isValid(countyId)) &&
+    input.userId &&
+    Types.ObjectId.isValid(input.userId)
+  ) {
+    const rider = await User.findById(input.userId).select("county").lean();
+    if (rider?.county) countyId = String(rider.county);
+  }
+
+  if (countyId && Types.ObjectId.isValid(countyId)) {
+    const county = await loadActiveCounty(countyId);
+    if (!county) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "Active county not found for this rider.",
+      );
+    }
+    return county;
+  }
+
+  return findCountyForPoint(input.pickup, input.payerId);
+};
+
+const countyCoversPoint = (countyId: Types.ObjectId, point: LngLat) =>
+  County.exists({
+    _id: countyId,
+    isActive: true,
+    coversAreasGeoJSON: {
+      $geoIntersects: {
+        $geometry: { type: "Point", coordinates: point },
+      },
+    },
+  });
 
 const mileageBands = (
   value: ICounty["mileage_based_price"],
@@ -125,7 +175,9 @@ const priceMileageBand = (county: ICounty, miles: number) => {
   // 2) If miles exceed all defined tiers, charge extra miles at highest tier's per_mile_price
   const highestBand = bands[bands.length - 1];
   const extraMiles = Math.max(0, miles - highestBand.starting_mileage);
-  return highestBand.first_miles_price + extraMiles * highestBand.per_mile_price;
+  return (
+    highestBand.first_miles_price + extraMiles * highestBand.per_mile_price
+  );
 };
 
 const priceByMethod = (county: ICounty, miles: number) => {
@@ -193,6 +245,8 @@ export const getTripPrice = async (input: {
   dropoff: LngLat;
   stop?: LngLat;
   payerId?: string;
+  countyId?: string;
+  userId?: string;
   tripType: "one-way" | "round-trip";
   mobilityRequirements?: string;
 }): Promise<TripQuote> => {
@@ -209,7 +263,7 @@ export const getTripPrice = async (input: {
     );
   }
 
-  const pickupCounty = await findCountyForPoint(input.pickup, input.payerId);
+  const pickupCounty = await resolvePickupCounty(input);
   /**
    * PREVIOUS IMPLEMENTATION
    * Missing county was ignored and the fare became 0.
@@ -221,14 +275,14 @@ export const getTripPrice = async (input: {
     );
   }
 
-  const dropoffCounty = await findCountyForPoint(input.dropoff, input.payerId);
-  const stopCounty = input.stop
-    ? await findCountyForPoint(input.stop, input.payerId)
-    : pickupCounty;
-
-  const fullyInside =
-    sameCounty(pickupCounty, dropoffCounty) &&
-    (!input.stop || sameCounty(pickupCounty, stopCounty));
+  const dropoffInside = await countyCoversPoint(
+    pickupCounty._id,
+    input.dropoff,
+  );
+  const stopInside = input.stop
+    ? await countyCoversPoint(pickupCounty._id, input.stop)
+    : true;
+  const fullyInside = Boolean(dropoffInside) && Boolean(stopInside);
 
   const miles = tripMiles(input.pickup, input.dropoff, input.stop);
   const methodFare = priceByMethod(pickupCounty, miles);
@@ -306,7 +360,7 @@ export const handlePayment = async (id: string) => {
     "price passengerCoPay userId bookingStatus paymentStatus stripeCheckoutSessionId",
   );
   if (!existing) throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
-  if (existing.bookingStatus !== "completed") {
+  if (existing.bookingStatus !== "trip-completed") {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
       "Co-pay can be collected only after the passenger is completed the trip",

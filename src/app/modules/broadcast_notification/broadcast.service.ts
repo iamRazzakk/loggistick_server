@@ -1,7 +1,11 @@
 import { UnrecoverableError } from "bullmq";
 import { USER_ROLES } from "../../../enums/user";
 import { FirebaseHelperFMC } from "../../../helpers/firebaseHelperFMC";
-import { SEND_BROADCAST_JOB, notificationQueue } from "../../../queue/notification.queue";
+import { sendNotifications } from "../../../helpers/notificationsHelper";
+import {
+  SEND_BROADCAST_JOB,
+  notificationQueue,
+} from "../../../queue/notification.queue";
 import QueryBuilder from "../../builder/queryBuilder";
 import { User } from "../user/user.model";
 import { BroadcastAudience } from "./broadcast.interface";
@@ -30,6 +34,7 @@ const collectTokens = async (audience: BroadcastAudience[]) => {
   const users = await User.find({
     role: { $in: roles },
     isBanned: false,
+    isPushNotificationEnabled: true,
   }).select("fcmToken");
 
   return [
@@ -99,6 +104,28 @@ const processBroadcast = async (notificationId: string) => {
   });
 
   await removeInvalidTokens(delivery.invalidTokens);
+
+  const roles = notification.audience.includes("ALL")
+    ? [USER_ROLES.USER, USER_ROLES.DRIVER, USER_ROLES.DISPATCHER]
+    : notification.audience;
+  const users = await User.find({
+    role: { $in: roles },
+    isBanned: false,
+    isPushNotificationEnabled: true,
+  }).select("_id");
+
+  for (const user of users) {
+    await sendNotifications({
+      text: notification.title,
+      description: notification.description,
+      receiver: user._id,
+      sender: notification.sentBy,
+      read: false,
+      referenceId: notification._id.toString(),
+      screen: "push_notification",
+      type: "admin",
+    });
+  }
 
   notification.successCount = delivery.successCount;
   notification.failureCount = delivery.failureCount;

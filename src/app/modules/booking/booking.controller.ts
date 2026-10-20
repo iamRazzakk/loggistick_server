@@ -149,6 +149,8 @@ const calculateTotalTripPrice = catchAsync(
     const payerId = req.body.payerId ?? req.body.payerSource;
     const tripType = req.body.tripType ?? "one-way";
     const mobilityRequirements = req.body.mobilityRequirements;
+    const countyId = req.body.countyId;
+    const userId = req.user?.id;
 
     const price = await BookingServices.calculateTotalTripPrice(
       pickup,
@@ -157,6 +159,8 @@ const calculateTotalTripPrice = catchAsync(
       payerId,
       tripType,
       mobilityRequirements,
+      countyId,
+      userId,
     );
     sendResponse(res, {
       statusCode: StatusCodes.OK,
