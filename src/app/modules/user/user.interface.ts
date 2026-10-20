@@ -39,6 +39,8 @@ export type IUser = {
   };
   trip: number;
   fcmToken?: string | null;
+  // need to add new field for push notification will send or not for this user
+  isPushNotificationEnabled?: boolean;
 };
 
 export type UserModal = {
