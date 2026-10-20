@@ -34,6 +34,7 @@ const collectTokens = async (audience: BroadcastAudience[]) => {
   const users = await User.find({
     role: { $in: roles },
     isBanned: false,
+    isPushNotificationEnabled: true,
   }).select("fcmToken");
 
   return [
@@ -110,6 +111,7 @@ const processBroadcast = async (notificationId: string) => {
   const users = await User.find({
     role: { $in: roles },
     isBanned: false,
+    isPushNotificationEnabled: true,
   }).select("_id");
 
   for (const user of users) {

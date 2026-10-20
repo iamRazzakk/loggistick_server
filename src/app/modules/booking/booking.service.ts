@@ -78,7 +78,9 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
       ? (payload.stopAddress as [number, number])
       : undefined,
     payerId: payload.payerSource?.toString(),
-    countyId: (payload as IBooking & { countyId?: string }).countyId?.toString(),
+    countyId: (
+      payload as IBooking & { countyId?: string }
+    ).countyId?.toString(),
     userId: user.id,
     tripType: payload.tripType,
     mobilityRequirements: payload.mobilityRequirements?.toString(),
