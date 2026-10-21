@@ -203,15 +203,10 @@ const priceByMethod = (county: ICounty, miles: number) => {
 };
 
 /**
- * PREVIOUS IMPLEMENTATION
- * zone fee was added into one `price` (base + inside/outside + mobility).
- * Passenger and Stripe both saw that total.
- *
- * NEW IMPLEMENTATION
- * totalPrice = method fare + mobility (doubled for round trip).
- * passengerCoPay = insidePrice or outsidePrice (doubled for round trip).
- * organizationContribution = totalPrice - passengerCoPay.
- * Change only this function if the meeting rule is different.
+ * passengerCoPay is the county zone fee: insidePrice when dropoff and stop
+ * are inside the pickup county, otherwise outsidePrice.
+ * totalPrice is every part added together: method fare + mobility + that co-pay.
+ * Round trip doubles each part. organizationContribution is the remainder.
  */
 const splitTripFare = (input: {
   methodFare: number;
@@ -224,14 +219,13 @@ const splitTripFare = (input: {
   "totalPrice" | "passengerCoPay" | "organizationContribution" | "zoneCoPay"
 > => {
   const multiplier = input.tripType === "round-trip" ? 2 : 1;
-  const totalPrice = toMoney(
-    (input.methodFare + input.mobilityPrice) * multiplier,
-  );
   const zoneCoPay = input.fullyInside
     ? (input.county.insidePrice ?? 0)
     : (input.county.outsidePrice ?? 0);
-  const rawCoPay = toMoney(zoneCoPay * multiplier);
-  const passengerCoPay = Math.min(rawCoPay, totalPrice);
+  const passengerCoPay = toMoney(zoneCoPay * multiplier);
+  const totalPrice = toMoney(
+    (input.methodFare + input.mobilityPrice) * multiplier + passengerCoPay,
+  );
   return {
     totalPrice,
     passengerCoPay,
@@ -269,10 +263,15 @@ export const getTripPrice = async (input: {
    * Missing county was ignored and the fare became 0.
    */
   if (!pickupCounty) {
-    throw new ApiError(
-      StatusCodes.BAD_REQUEST,
-      "Pickup is outside every active county for this payer.",
-    );
+    return {
+      totalPrice: 0,
+      passengerCoPay: 0,
+      organizationContribution: 0,
+      milesPrice: 0,
+      mobilityTotalPrice: 0,
+      zoneCoPay: 0,
+      zone: "outside",
+    };
   }
 
   const dropoffInside = await countyCoversPoint(

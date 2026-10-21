@@ -30,6 +30,7 @@ import {
 
 import { Driverrating } from "../driverrating/driverrating.model";
 import {
+  buildApprovedBookingFilter,
   buildPendingBookingFilter,
   buildTripHistoryFilter,
 } from "./booking.query";
@@ -222,15 +223,17 @@ const getAllApprovedBookingsFromDB = async (
   user: JwtPayload,
   query: Record<string, any>,
 ) => {
-  const qb = new QueryBuilder(
-    Booking.find({ bookingStatus: "assigned", isApproved: "approved" }),
-    query,
-  )
+  const { searchTerm, ...restQuery } = query;
+  const bookingFilter = await buildApprovedBookingFilter(searchTerm);
+
+  const qb = new QueryBuilder(Booking.find(bookingFilter), restQuery)
     .filter()
     .sort()
-    .search(["bookingStatus", "tripReason", "tripNote"])
-    .populate(["userId"], {
+    .populate(["userId", "mobilityRequirements", "payerSource", "driverId"], {
       userId: "firstName lastName middleName profile",
+      mobilityRequirements: "name price icon",
+      payerSource: "name type",
+      driverId: "firstName lastName middleName",
     });
   const [data, meta] = await Promise.all([
     qb.modelQuery.lean().exec(),
@@ -276,6 +279,8 @@ const getTripHistoryFromDB = async (
 
   return { data, meta };
 };
+
+
 // trip history get in excel file
 const getTripHistoryInExcelFromDB = async (
   _user: JwtPayload,

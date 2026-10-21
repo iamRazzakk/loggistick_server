@@ -44,6 +44,7 @@ const getAllCountiesFromDB = async (payersId?: string) => {
   }
 
   const result = await County.find(filter)
+    .select("_id payersId priceMethod")
     .populate("payersId", "name type isActive")
     .lean();
 
