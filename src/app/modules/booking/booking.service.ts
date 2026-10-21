@@ -280,7 +280,6 @@ const getTripHistoryFromDB = async (
   return { data, meta };
 };
 
-
 // trip history get in excel file
 const getTripHistoryInExcelFromDB = async (
   _user: JwtPayload,

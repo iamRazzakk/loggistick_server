@@ -181,15 +181,7 @@ const priceMileageBand = (county: ICounty, miles: number) => {
 };
 
 const priceByMethod = (county: ICounty, miles: number) => {
-  if (county.priceMethod === "flat_rate") {
-    if (county.flat_rate_price == null) {
-      throw new ApiError(
-        StatusCodes.BAD_REQUEST,
-        "Flat rate is missing for the pickup county",
-      );
-    }
-    return county.flat_rate_price;
-  }
+  if (county.priceMethod === "flat_rate") return 0;
 
   if (county.priceMethod === "per_mile") {
     const startingFare = county.starting_fare ?? 0;
@@ -282,9 +274,7 @@ export const getTripPrice = async (input: {
     ? await countyCoversPoint(pickupCounty._id, input.stop)
     : true;
   const fullyInside = Boolean(dropoffInside) && Boolean(stopInside);
-
-  const miles = tripMiles(input.pickup, input.dropoff, input.stop);
-  const methodFare = priceByMethod(pickupCounty, miles);
+  const zone = fullyInside ? "inside" : "outside";
 
   let mobilityPrice = 0;
   if (
@@ -297,6 +287,33 @@ export const getTripPrice = async (input: {
     mobilityPrice = mobility?.price ?? 0;
   }
 
+  /**
+   * Flat rate ignores miles and flat_rate_price.
+   * totalPrice is the county zone price plus mobility.
+   * Fields used by the other price methods stay 0.
+   */
+  if (pickupCounty.priceMethod === "flat_rate") {
+    const multiplier = input.tripType === "round-trip" ? 2 : 1;
+    const countyPrice = fullyInside
+      ? (pickupCounty.insidePrice ?? 0)
+      : (pickupCounty.outsidePrice ?? 0);
+    const zoneCoPay = toMoney(countyPrice * multiplier);
+    const mobilityTotalPrice = toMoney(mobilityPrice * multiplier);
+    return {
+      totalPrice: toMoney(zoneCoPay + mobilityTotalPrice),
+      passengerCoPay: 0,
+      organizationContribution: 0,
+      milesPrice: 0,
+      mobilityTotalPrice,
+      zoneCoPay,
+      priceMethod: "flat_rate",
+      countyId: pickupCounty._id,
+      zone,
+    };
+  }
+
+  const miles = tripMiles(input.pickup, input.dropoff, input.stop);
+  const methodFare = priceByMethod(pickupCounty, miles);
   const split = splitTripFare({
     methodFare,
     mobilityPrice,
@@ -311,7 +328,7 @@ export const getTripPrice = async (input: {
     mobilityTotalPrice: toMoney(mobilityPrice),
     priceMethod: pickupCounty.priceMethod,
     countyId: pickupCounty._id,
-    zone: fullyInside ? "inside" : "outside",
+    zone,
   };
 };
 
@@ -426,9 +443,15 @@ export const applyServerFare = (
   payload: Partial<IBooking>,
   quote: TripQuote,
 ) => {
+  const flatRate = quote.priceMethod === "flat_rate";
+  const passengerCoPay = flatRate ? quote.zoneCoPay : quote.passengerCoPay;
+  const organizationContribution = flatRate
+    ? toMoney(quote.totalPrice - quote.zoneCoPay)
+    : quote.organizationContribution;
+
   payload.totalPrice = quote.totalPrice;
-  payload.passengerCoPay = quote.passengerCoPay;
-  payload.organizationContribution = quote.organizationContribution;
-  payload.price = quote.passengerCoPay;
-  payload.paymentStatus = quote.passengerCoPay <= 0 ? "paid" : "pending";
+  payload.passengerCoPay = passengerCoPay;
+  payload.organizationContribution = organizationContribution;
+  payload.price = passengerCoPay;
+  payload.paymentStatus = passengerCoPay <= 0 ? "paid" : "pending";
 };
