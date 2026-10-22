@@ -265,9 +265,11 @@ const getTripHistoryFromDB = async (
   const qb = new QueryBuilder(Booking.find(bookingFilter), restQuery)
     .filter()
     .sort()
-    .populate(["userId", "driverId"], {
+    .populate(["userId", "driverId", "mobilityRequirements", "payerSource"], {
       userId: "firstName lastName middleName profile",
       driverId: "firstName lastName middleName profile",
+      mobilityRequirements: "name price icon",
+      payerSource: "name type",
     })
     .fields()
     .paginate();
