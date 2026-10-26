@@ -3,6 +3,8 @@ import { BookingServices } from "./booking.service";
 import catchAsync from "../../../shared/catchAsync";
 import sendResponse from "../../../shared/sendResponse";
 import { StatusCodes } from "http-status-codes";
+import { USER_ROLES } from "../../../enums/user";
+import { presentQuoteForViewer } from "./booking.utils";
 
 const createBooking = catchAsync(async (req: Request, res: Response) => {
   const booking = await BookingServices.createBookingIntoDB(req.user, req.body);
@@ -150,7 +152,15 @@ const calculateTotalTripPrice = catchAsync(
     const tripType = req.body.tripType ?? "one-way";
     const mobilityRequirements = req.body.mobilityRequirements;
     const countyId = req.body.countyId;
-    const userId = req.user?.id;
+    const userId =
+      req.user?.role === USER_ROLES.USER
+        ? req.user?.id
+        : (req.body.userId ?? req.user?.id);
+    const serviceDate = req.body.serviceDate;
+    const actualGpsMileage =
+      req.body.actualGpsMileage == null
+        ? undefined
+        : Number(req.body.actualGpsMileage);
 
     const price = await BookingServices.calculateTotalTripPrice(
       pickup,
@@ -161,12 +171,14 @@ const calculateTotalTripPrice = catchAsync(
       mobilityRequirements,
       countyId,
       userId,
+      serviceDate,
+      actualGpsMileage,
     );
     sendResponse(res, {
       statusCode: StatusCodes.OK,
       success: true,
       message: "Total trip price calculated successfully",
-      data: price,
+      data: presentQuoteForViewer(price, req.user?.role),
     });
   },
 );

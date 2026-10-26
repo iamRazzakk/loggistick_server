@@ -85,6 +85,13 @@ router
     UserController.updateProfile,
   );
 
+// banned user and driver
+router.patch(
+  "/banned/:id",
+  auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+  UserController.bannedUserAndDriver,
+);
+
 // dispatcher
 router
   .route("/dispatcher")

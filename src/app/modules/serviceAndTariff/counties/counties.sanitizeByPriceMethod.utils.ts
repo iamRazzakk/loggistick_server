@@ -7,14 +7,22 @@ const PER_MILE_ONLY = [
   "starting_fare",
   "first_miles_price",
   "per_mile_price",
+  "base_rate",
+  "per_mile_rate",
 ] as const;
-const MILEAGE_BASED_ONLY = ["mileage_based_price"] as const;
+const MILEAGE_BASED_ONLY = ["mileage_based_price", "mileage_brackets"] as const;
+const FIRST_X_ONLY = [
+  "initial_miles",
+  "initial_charge",
+  "additional_per_mile",
+] as const;
 
 /** All price-related keys that must be cleared when switching method */
 const ALL_PRICE_FIELD_KEYS = [
   ...FLAT_RATE_ONLY,
   ...PER_MILE_ONLY,
   ...MILEAGE_BASED_ONLY,
+  ...FIRST_X_ONLY,
 ] as const;
 
 const COMMON_KEYS = [
@@ -24,6 +32,16 @@ const COMMON_KEYS = [
   "insidePrice",
   "outsidePrice",
   "isActive",
+  "zonePricing",
+  "passengerCopayInside",
+  "passengerCopayOutside",
+  "mileageSource",
+  "mileageRounding",
+  "mileagePrecision",
+  "mobilityBillingMap",
+  "chargeRules",
+  "effectiveFrom",
+  "effectiveTo",
 ] as const;
 
 const toNumber = (value: unknown): number | undefined => {
@@ -173,6 +191,11 @@ export const sanitizeCountyPayloadByPriceMethod = (
     return sanitized;
   }
 
+  if (priceMethod === "first_x_miles") {
+    Object.assign(sanitized, pickDefined(body, FIRST_X_ONLY as unknown as string[]));
+    return sanitized;
+  }
+
   // mileage_based
   const mileage = buildMileageBasedPrice(body);
   if (mileage) {
@@ -193,7 +216,9 @@ export const getPriceFieldsToUnset = (
       ? new Set(FLAT_RATE_ONLY)
       : priceMethod === "per_mile"
         ? new Set(PER_MILE_ONLY)
-        : new Set(MILEAGE_BASED_ONLY);
+        : priceMethod === "first_x_miles"
+          ? new Set(FIRST_X_ONLY)
+          : new Set(MILEAGE_BASED_ONLY);
 
   const unset: Record<string, 1> = {};
   for (const key of ALL_PRICE_FIELD_KEYS) {

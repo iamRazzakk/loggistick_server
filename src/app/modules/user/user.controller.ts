@@ -137,6 +137,18 @@ const createDriverAsAdmin = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+
+// banned user and driver
+const bannedUserAndDriver = catchAsync(async (req: Request, res: Response) => {
+  const result = await UserService.bannedUserAndDriverFromDB(req.params.id, req.body);
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "User and driver banned successfully",
+    data: result,
+  });
+});
+
 export const UserController = {
   createUser,
   getUserProfile,
@@ -148,4 +160,5 @@ export const UserController = {
   updateDispatcherRoutes,
   getAllDispatchers,
   createDriverAsAdmin,
+  bannedUserAndDriver
 };

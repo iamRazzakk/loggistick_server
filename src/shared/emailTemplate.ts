@@ -126,16 +126,16 @@ const dispatcherCreated = (values: {
 }) => {
   const data = {
     to: values.email,
-    subject: `Dispatcher created successfully`,
+    subject: `Your ${BRAND_NAME} ${values.middleName} account has been created`,
     html: `
             <body style="font-family: Arial, sans-serif; background-color: #f9f9f9; margin: 50px; padding: 20px; color: #555;">
                 <div style="width: 100%; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fff; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
 
                     ${logoHtml}
 
-                    <h2 style="color: ${BRAND_COLOR}; font-size: 24px; margin-bottom: 20px;">Hey, ${values.firstName} ${values.middleName ? values.middleName : ""} ${values.lastName}!</h2>
+                    <h2 style="color: ${BRAND_COLOR}; font-size: 24px; margin-bottom: 20px;">Hey, ${values.firstName} ${values.lastName}!</h2>
 
-                    <p style="color: #555; font-size: 16px; line-height: 1.5; margin-bottom: 20px;">Your ${BRAND_NAME} dispatcher account has been created. Use the credentials below to log in:</p>
+                    <p style="color: #555; font-size: 16px; line-height: 1.5; margin-bottom: 20px;">Your ${BRAND_NAME} dispatcher account has been created. Your role is ${values.middleName}. Use the credentials below to log in:</p>
 
                     <div style="background-color: #f6f6f6; border-radius: 8px; padding: 16px 20px; margin-bottom: 24px;">
                         <p style="color: #555; font-size: 16px; line-height: 1.6; margin: 0 0 8px 0;"><strong>Email:</strong> ${values.email}</p>
@@ -163,7 +163,6 @@ const driverCreated = (values: {
 }) => {
   const data = {
     to: values.email,
-
     subject: `Driver created successfully`,
     html: `
             <body style="font-family: Arial, sans-serif; background-color: #f9f9f9; margin: 50px; padding: 20px; color: #555;">

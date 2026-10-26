@@ -67,6 +67,8 @@ const bookingBodySchema = z.object({
 
   recurringBatchId: z.string().optional(),
   price: z.number().optional().default(0),
+  countyId: checkValidID("Valid countyId is required").optional(),
+  actualGpsMileage: z.number().min(0).optional(),
 });
 
 const bookingBodyRefine = (

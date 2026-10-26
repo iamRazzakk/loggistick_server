@@ -9,8 +9,24 @@ const NUMBER_FIELDS = [
   "starting_fare",
   "first_miles_price",
   "per_mile_price",
+  "base_rate",
+  "per_mile_rate",
+  "initial_miles",
+  "initial_charge",
+  "additional_per_mile",
+  "passengerCopayInside",
+  "passengerCopayOutside",
+  "mileagePrecision",
   "insidePrice",
   "outsidePrice",
+] as const;
+
+const JSON_FIELDS = [
+  "mileage_based_price",
+  "mileage_brackets",
+  "zonePricing",
+  "mobilityBillingMap",
+  "chargeRules",
 ] as const;
 
 const parseJsonField = (value: unknown) => {
@@ -79,7 +95,9 @@ export const parseCountyUpload = (
 
     // Nested JSON string fields from FormData
     req.body.coversAreasGeoJSON = parseJsonField(req.body.coversAreasGeoJSON);
-    req.body.mileage_based_price = parseJsonField(req.body.mileage_based_price);
+    for (const field of JSON_FIELDS) {
+      req.body[field] = parseJsonField(req.body[field]);
+    }
 
     for (const field of NUMBER_FIELDS) {
       req.body[field] = coerceNumber(req.body[field]);

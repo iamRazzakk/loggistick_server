@@ -1,6 +1,7 @@
 import { Model, Types } from "mongoose";
 import { AppointmentType } from "../../../enums/AppointmentType";
 import { BookingStatus } from "../../../enums/BookingStatus";
+import { ChargeOutcome, PricedLeg } from "./pricing/tripPricing";
 
 export type IBooking = {
   userId: Types.ObjectId;
@@ -34,20 +35,29 @@ export type IBooking = {
   bookingStatus: BookingStatus;
   recurringBatchId?: string;
 
-  /** Passenger co-pay. Kept so older clients that read `price` do not show the total. */
+  /** Passenger copay. This is the only amount the passenger pays. */
   price?: number;
 
-  /** Server-calculated full fare. Hidden from the passenger role. */
+  /** Funding-source charge. Hidden from the passenger role. */
   totalPrice?: number;
   passengerCoPay?: number;
 
-  /** totalPrice - passengerCoPay. Hidden from the passenger role. */
+  /** Funding-source charge. Independent of passengerCoPay. Hidden from the passenger role. */
   organizationContribution?: number;
+  calculatedRouteMileage?: number | null;
+  actualGpsMileage?: number | null;
+  straightLineMileage?: number;
+  billingMileage?: number;
+  billingMileageSource?: string;
+  pricingLegs?: PricedLeg[];
+  cancellationOutcome?: ChargeOutcome;
+  noShowOutcome?: ChargeOutcome;
   isApproved?: "pending" | "approved" | "rejected";
   paymentStatus?: "pending" | "paid" | "failed";
 
   /** Open Stripe Checkout session, so a retry does not create a second charge. */
   stripeCheckoutSessionId?: string;
+  countyId?: Types.ObjectId;
   cancelledBy?: Types.ObjectId;
 };
 

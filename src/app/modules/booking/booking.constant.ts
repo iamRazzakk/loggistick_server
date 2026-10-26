@@ -28,6 +28,13 @@ export const LOCKED_FARE_FIELDS = [
   "organizationContribution",
   "paymentStatus",
   "stripeCheckoutSessionId",
+  "calculatedRouteMileage",
+  "straightLineMileage",
+  "billingMileage",
+  "billingMileageSource",
+  "pricingLegs",
+  "cancellationOutcome",
+  "noShowOutcome",
 ] as const;
 
 export const STAFF = new Set<string>([

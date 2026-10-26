@@ -2,17 +2,27 @@ import { StatusCodes } from "http-status-codes";
 import { Types } from "mongoose";
 import ApiError from "../../../errors/ApiErrors";
 import { USER_ROLES } from "../../../enums/user";
-import {
-  ICounty,
-  IMileageBasedPrice,
-} from "../serviceAndTariff/counties/counties.interface";
+import { ICounty } from "../serviceAndTariff/counties/counties.interface";
 import { County } from "../serviceAndTariff/counties/counties.model";
-import { Mobility } from "../serviceAndTariff/mobility/mobility.model";
 import { Booking } from "./booking.model";
 import { User } from "../user/user.model";
 import stripe from "../../../config/stripe";
 import config from "../../../config";
 import { IBooking } from "./booking.interface";
+import {
+  ChargeOutcome,
+  MileageSource,
+  PricedLeg,
+  RateCard,
+  ZoneName,
+  applyChargeOutcome,
+  classifyZone,
+  isCountyEffective,
+  legacyBandsToBrackets,
+  priceFundingSourceCharge,
+  selectBillingMileage,
+  toMoney,
+} from "./pricing/tripPricing";
 
 type LngLat = [number, number];
 
@@ -22,12 +32,21 @@ export type TripQuote = {
   totalPrice: number;
   passengerCoPay: number;
   organizationContribution: number;
+  fundingSourceCharge: number;
   milesPrice: number;
   mobilityTotalPrice: number;
   zoneCoPay: number;
   priceMethod?: ICounty["priceMethod"];
   countyId?: Types.ObjectId;
-  zone: "inside" | "outside";
+  zone: ZoneName;
+  legs: PricedLeg[];
+  calculatedRouteMileage: number | null;
+  actualGpsMileage: number | null;
+  straightLineMileage: number;
+  billingMileage: number;
+  billingMileageSource: string;
+  cancellationOutcome: ChargeOutcome;
+  noShowOutcome: ChargeOutcome;
 };
 
 const isLngLat = (value: LngLat) =>
@@ -48,26 +67,91 @@ const milesBetween = (from: LngLat, to: LngLat) => {
   return EARTH_RADIUS_MILES * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 };
 
-const tripMiles = (pickup: LngLat, dropoff: LngLat, stop?: LngLat) => {
-  if (!stop) return milesBetween(pickup, dropoff);
-  return milesBetween(pickup, stop) + milesBetween(stop, dropoff);
+const straightLineMiles = (points: LngLat[]) => {
+  let total = 0;
+  for (let i = 1; i < points.length; i += 1) {
+    total += milesBetween(points[i - 1], points[i]);
+  }
+  return total;
 };
 
-const toMoney = (value: number) => {
-  if (!Number.isFinite(value)) {
-    throw new ApiError(
-      StatusCodes.BAD_REQUEST,
-      "Trip price could not be calculated",
-    );
+const drivingMiles = async (from: LngLat, to: LngLat) => {
+  const key = config.googleMapApi?.apiKey;
+  if (!key) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 4000);
+  try {
+    const origin = `${from[1]},${from[0]}`;
+    const destination = `${to[1]},${to[0]}`;
+    const url =
+      "https://maps.googleapis.com/maps/api/distancematrix/json" +
+      `?origins=${encodeURIComponent(origin)}` +
+      `&destinations=${encodeURIComponent(destination)}` +
+      `&units=imperial&key=${encodeURIComponent(key)}`;
+    const response = await fetch(url, { signal: controller.signal });
+    const body = (await response.json()) as {
+      rows?: { elements?: { status?: string; distance?: { value?: number } }[] }[];
+    };
+    const element = body.rows?.[0]?.elements?.[0];
+    if (element?.status !== "OK" || typeof element.distance?.value !== "number") {
+      return null;
+    }
+    return element.distance.value / 1609.344;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
   }
-  return Math.round((value + Number.EPSILON) * 100) / 100;
+};
+
+const measurePath = async (points: LngLat[], wantRoute: boolean) => {
+  const straightLineMileage = straightLineMiles(points);
+  if (!wantRoute) {
+    return { straightLineMileage, calculatedRouteMileage: null as number | null };
+  }
+  let route = 0;
+  for (let i = 1; i < points.length; i += 1) {
+    const driven = await drivingMiles(points[i - 1], points[i]);
+    if (driven == null) {
+      return { straightLineMileage, calculatedRouteMileage: null };
+    }
+    route += driven;
+  }
+  return { straightLineMileage, calculatedRouteMileage: route };
 };
 
 type PricingCounty = { _id: Types.ObjectId } & ICounty;
 
-const findCountyForPoint = (point: LngLat, payerId?: string) => {
+const serviceDayOf = (serviceDate?: string) => {
+  if (serviceDate && /^\d{4}-\d{2}-\d{2}$/.test(serviceDate)) return serviceDate;
+  return new Date().toISOString().slice(0, 10);
+};
+
+const effectiveFilter = (serviceDay: string) => ({
+  $and: [
+    {
+      $or: [
+        { effectiveFrom: { $exists: false } },
+        { effectiveFrom: null },
+        { effectiveFrom: "" },
+        { effectiveFrom: { $lte: serviceDay } },
+      ],
+    },
+    {
+      $or: [
+        { effectiveTo: { $exists: false } },
+        { effectiveTo: null },
+        { effectiveTo: "" },
+        { effectiveTo: { $gte: serviceDay } },
+      ],
+    },
+  ],
+});
+
+const findCountyForPoint = (point: LngLat, payerId: string | undefined, serviceDay: string) => {
   const filter: Record<string, unknown> = {
     isActive: true,
+    ...effectiveFilter(serviceDay),
     coversAreasGeoJSON: {
       $geoIntersects: {
         $geometry: { type: "Point", coordinates: point },
@@ -77,7 +161,7 @@ const findCountyForPoint = (point: LngLat, payerId?: string) => {
   if (payerId && Types.ObjectId.isValid(payerId)) {
     filter.payersId = new Types.ObjectId(payerId);
   }
-  return County.findOne(filter).lean<PricingCounty>();
+  return County.findOne(filter).sort({ effectiveFrom: -1 }).lean<PricingCounty>();
 };
 
 const loadActiveCounty = (countyId: string) =>
@@ -88,8 +172,7 @@ const loadActiveCounty = (countyId: string) =>
 
 /**
  * countyId, when sent, selects the tariff.
- * Otherwise the authenticated user id (JWT) is used to read User.county.
- * The body is never trusted for that user id.
+ * Otherwise the rider id is used to read User.county.
  * Geo lookup stays only when neither id resolves a county.
  */
 const resolvePickupCounty = async (input: {
@@ -97,7 +180,9 @@ const resolvePickupCounty = async (input: {
   payerId?: string;
   countyId?: string;
   userId?: string;
+  serviceDate?: string;
 }) => {
+  const serviceDay = serviceDayOf(input.serviceDate);
   let countyId = input.countyId;
   if (
     (!countyId || !Types.ObjectId.isValid(countyId)) &&
@@ -116,10 +201,16 @@ const resolvePickupCounty = async (input: {
         "Active county not found for this rider.",
       );
     }
+    if (!isCountyEffective(county, serviceDay)) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "Pricing county is not effective on this service date.",
+      );
+    }
     return county;
   }
 
-  return findCountyForPoint(input.pickup, input.payerId);
+  return findCountyForPoint(input.pickup, input.payerId, serviceDay);
 };
 
 const countyCoversPoint = (countyId: Types.ObjectId, point: LngLat) =>
@@ -133,96 +224,60 @@ const countyCoversPoint = (countyId: Types.ObjectId, point: LngLat) =>
     },
   });
 
-const mileageBands = (
-  value: ICounty["mileage_based_price"],
-): IMileageBasedPrice[] => {
-  if (!value) return [];
-  const rows = Array.isArray(value) ? value : [value as IMileageBasedPrice];
-  return rows.filter(
-    (band) =>
-      Number.isFinite(band?.starting_mileage) &&
-      Number.isFinite(band?.first_miles_price) &&
-      Number.isFinite(band?.per_mile_price),
+const billingClassFor = (county: PricingCounty, mobilityId?: string) => {
+  if (!mobilityId || !county.mobilityBillingMap?.length) return undefined;
+  const row = county.mobilityBillingMap.find(
+    (item) => String(item.mobilityId) === String(mobilityId),
   );
+  return row?.billingClass;
 };
 
-/**
- * Tier matching implementation for mileage_based price method:
- * 1) Bands are sorted ascending by starting_mileage (e.g. 20, 25, 30, 35).
- * 2) Match the tier where miles fall into (e.g. miles <= 20 uses Band 1; 20-25 uses Band 2, etc.)
- *    and charge that tier's first_miles_price.
- * 3) If miles exceed all defined tiers (e.g. miles > 35), use the highest tier's
- *    first_miles_price plus extra miles charged at that tier's per_mile_price.
- */
-const priceMileageBand = (county: ICounty, miles: number) => {
-  const bands = mileageBands(county.mileage_based_price).sort(
-    (a, b) => a.starting_mileage - b.starting_mileage,
-  );
-  if (!bands.length) {
-    throw new ApiError(
-      StatusCodes.BAD_REQUEST,
-      "Mileage bands are missing for the pickup county",
-    );
+const rateCardFor = (
+  county: PricingCounty,
+  zone: ZoneName,
+  billingClass?: string,
+): RateCard => {
+  const zoneCard = county.zonePricing?.[zone];
+  const classCard = billingClass
+    ? zoneCard?.classRates?.find((row) => row.billingClass === billingClass)
+    : undefined;
+  const selected = classCard ?? zoneCard;
+  const legacyBrackets = county.mileage_brackets?.length
+    ? county.mileage_brackets
+    : legacyBandsToBrackets(county.mileage_based_price);
+  const zoneCopay =
+    zone === "inside"
+      ? (county.passengerCopayInside ?? 0)
+      : (county.passengerCopayOutside ?? 0);
+
+  if (!selected) {
+    return {
+      priceMethod: county.priceMethod,
+      flat_rate_price: county.flat_rate_price,
+      base_rate: county.base_rate ?? county.starting_fare ?? 0,
+      per_mile_rate: county.per_mile_rate ?? county.per_mile_price ?? 0,
+      mileage_brackets: legacyBrackets,
+      initial_miles: county.initial_miles ?? 0,
+      initial_charge: county.initial_charge ?? 0,
+      additional_per_mile: county.additional_per_mile ?? 0,
+      passenger_copay: zoneCopay,
+    };
   }
 
-  // 1) Match the tier where miles fall into
-  for (const band of bands) {
-    if (miles <= band.starting_mileage) {
-      return band.first_miles_price;
-    }
-  }
-
-  // 2) If miles exceed all defined tiers, charge extra miles at highest tier's per_mile_price
-  const highestBand = bands[bands.length - 1];
-  const extraMiles = Math.max(0, miles - highestBand.starting_mileage);
-  return (
-    highestBand.first_miles_price + extraMiles * highestBand.per_mile_price
-  );
-};
-
-const priceByMethod = (county: ICounty, miles: number) => {
-  if (county.priceMethod === "flat_rate") return 0;
-
-  if (county.priceMethod === "per_mile") {
-    const startingFare = county.starting_fare ?? 0;
-    const firstMilesPrice = county.first_miles_price ?? 0;
-    const perMile = county.per_mile_price ?? 0;
-    if (miles <= 0) return startingFare;
-    return startingFare + firstMilesPrice + Math.max(0, miles - 1) * perMile;
-  }
-
-  return priceMileageBand(county, miles);
-};
-
-/**
- * passengerCoPay is the county zone fee: insidePrice when dropoff and stop
- * are inside the pickup county, otherwise outsidePrice.
- * totalPrice is every part added together: method fare + mobility + that co-pay.
- * Round trip doubles each part. organizationContribution is the remainder.
- */
-const splitTripFare = (input: {
-  methodFare: number;
-  mobilityPrice: number;
-  fullyInside: boolean;
-  county: ICounty;
-  tripType: "one-way" | "round-trip";
-}): Pick<
-  TripQuote,
-  "totalPrice" | "passengerCoPay" | "organizationContribution" | "zoneCoPay"
-> => {
-  const multiplier = input.tripType === "round-trip" ? 2 : 1;
-  const zoneCoPay = input.fullyInside
-    ? (input.county.insidePrice ?? 0)
-    : (input.county.outsidePrice ?? 0);
-  const passengerCoPay = toMoney(zoneCoPay * multiplier);
-  const totalPrice = toMoney(
-    (input.methodFare + input.mobilityPrice) * multiplier + passengerCoPay,
-  );
   return {
-    totalPrice,
-    passengerCoPay,
-    organizationContribution: toMoney(totalPrice - passengerCoPay),
-    zoneCoPay: passengerCoPay,
+    priceMethod: selected.priceMethod,
+    flat_rate_price: selected.flat_rate_price ?? county.flat_rate_price,
+    base_rate: selected.base_rate ?? county.base_rate ?? county.starting_fare ?? 0,
+    per_mile_rate:
+      selected.per_mile_rate ?? county.per_mile_rate ?? county.per_mile_price ?? 0,
+    mileage_brackets: selected.mileage_brackets?.length
+      ? selected.mileage_brackets
+      : legacyBrackets,
+    initial_miles: selected.initial_miles ?? county.initial_miles ?? 0,
+    initial_charge: selected.initial_charge ?? county.initial_charge ?? 0,
+    additional_per_mile:
+      selected.additional_per_mile ?? county.additional_per_mile ?? 0,
+    passenger_copay: selected.passenger_copay ?? zoneCopay,
   };
 };
 
@@ -235,6 +290,8 @@ export const getTripPrice = async (input: {
   userId?: string;
   tripType: "one-way" | "round-trip";
   mobilityRequirements?: string;
+  serviceDate?: string;
+  actualGpsMileage?: number | null;
 }): Promise<TripQuote> => {
   if (!isLngLat(input.pickup) || !isLngLat(input.dropoff)) {
     throw new ApiError(
@@ -250,99 +307,159 @@ export const getTripPrice = async (input: {
   }
 
   const pickupCounty = await resolvePickupCounty(input);
-  /**
-   * PREVIOUS IMPLEMENTATION
-   * Missing county was ignored and the fare became 0.
-   */
   if (!pickupCounty) {
-    return {
-      totalPrice: 0,
-      passengerCoPay: 0,
-      organizationContribution: 0,
-      milesPrice: 0,
-      mobilityTotalPrice: 0,
-      zoneCoPay: 0,
-      zone: "outside",
-    };
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "No active pricing county covers this trip.",
+    );
   }
 
-  const dropoffInside = await countyCoversPoint(
-    pickupCounty._id,
-    input.dropoff,
+  const pickupInside = Boolean(
+    await countyCoversPoint(pickupCounty._id, input.pickup),
   );
-  const stopInside = input.stop
-    ? await countyCoversPoint(pickupCounty._id, input.stop)
-    : true;
-  const fullyInside = Boolean(dropoffInside) && Boolean(stopInside);
-  const zone = fullyInside ? "inside" : "outside";
+  const dropoffInside = Boolean(
+    await countyCoversPoint(pickupCounty._id, input.dropoff),
+  );
+  const outboundZone = classifyZone(pickupInside, dropoffInside);
+  const returnZone = classifyZone(dropoffInside, pickupInside);
+  const billingClass = billingClassFor(
+    pickupCounty,
+    input.mobilityRequirements,
+  );
+  const mileageSource: MileageSource = pickupCounty.mileageSource ?? "straight_line";
+  const rounding = pickupCounty.mileageRounding ?? "none";
+  const precision = pickupCounty.mileagePrecision ?? 2;
+  const wantRoute = mileageSource === "calculated_route";
+  const gps =
+    input.actualGpsMileage != null && Number.isFinite(input.actualGpsMileage)
+      ? input.actualGpsMileage
+      : null;
 
-  let mobilityPrice = 0;
-  if (
-    input.mobilityRequirements &&
-    Types.ObjectId.isValid(input.mobilityRequirements)
-  ) {
-    const mobility = await Mobility.findById(input.mobilityRequirements)
-      .select("price")
-      .lean();
-    mobilityPrice = mobility?.price ?? 0;
+  const paths: { leg: PricedLeg["leg"]; zone: ZoneName; points: LngLat[]; gps: number | null }[] =
+    [
+      {
+        leg: "outbound",
+        zone: outboundZone,
+        points: input.stop ? [input.pickup, input.stop, input.dropoff] : [input.pickup, input.dropoff],
+        gps: input.tripType === "round-trip" ? null : gps,
+      },
+    ];
+  if (input.tripType === "round-trip") {
+    paths.push({
+      leg: "return",
+      zone: returnZone,
+      points: [input.dropoff, input.pickup],
+      gps: null,
+    });
+  }
+  if (input.tripType === "one-way") {
+    paths[0].gps = gps;
+  } else if (gps != null) {
+    paths[0].gps = gps;
   }
 
-  /**
-   * Flat rate ignores miles and flat_rate_price.
-   * totalPrice is the county zone price plus mobility.
-   * Fields used by the other price methods stay 0.
-   */
-  if (pickupCounty.priceMethod === "flat_rate") {
-    const multiplier = input.tripType === "round-trip" ? 2 : 1;
-    const countyPrice = fullyInside
-      ? (pickupCounty.insidePrice ?? 0)
-      : (pickupCounty.outsidePrice ?? 0);
-    const zoneCoPay = toMoney(countyPrice * multiplier);
-    const mobilityTotalPrice = toMoney(mobilityPrice * multiplier);
-    return {
-      totalPrice: toMoney(zoneCoPay + mobilityTotalPrice),
-      passengerCoPay: 0,
-      organizationContribution: 0,
-      milesPrice: 0,
-      mobilityTotalPrice,
-      zoneCoPay,
-      priceMethod: "flat_rate",
-      countyId: pickupCounty._id,
-      zone,
-    };
+  const legs: PricedLeg[] = [];
+  for (const path of paths) {
+    const measured = await measurePath(path.points, wantRoute);
+    const selected = selectBillingMileage({
+      source: mileageSource,
+      calculatedRouteMileage: measured.calculatedRouteMileage,
+      actualGpsMileage: path.gps,
+      straightLineMileage: measured.straightLineMileage,
+    });
+    const card = rateCardFor(pickupCounty, path.zone, billingClass);
+    const priced = priceFundingSourceCharge(
+      card,
+      selected.billingMileage,
+      rounding,
+      precision,
+    );
+    legs.push({
+      leg: path.leg,
+      zone: path.zone,
+      billingClass,
+      priceMethod: card.priceMethod,
+      straightLineMileage: Number(measured.straightLineMileage.toFixed(4)),
+      calculatedRouteMileage: measured.calculatedRouteMileage,
+      billingMileage: priced.billingMileage,
+      billingMileageSource: selected.billingMileageSource,
+      fundingSourceCharge: priced.charge,
+      passengerCoPay: toMoney(card.passenger_copay ?? 0),
+    });
   }
 
-  const miles = tripMiles(input.pickup, input.dropoff, input.stop);
-  const methodFare = priceByMethod(pickupCounty, miles);
-  const split = splitTripFare({
-    methodFare,
-    mobilityPrice,
-    fullyInside,
-    county: pickupCounty,
-    tripType: input.tripType,
-  });
+  const fundingSourceCharge = toMoney(
+    legs.reduce((sum, leg) => sum + leg.fundingSourceCharge, 0),
+  );
+  const passengerCoPay = toMoney(
+    legs.reduce((sum, leg) => sum + leg.passengerCoPay, 0),
+  );
+  const straightLineMileage = legs.reduce((sum, leg) => sum + leg.straightLineMileage, 0);
+  const routeValues = legs.map((leg) => leg.calculatedRouteMileage);
+  const calculatedRouteMileage = routeValues.every((value) => value != null)
+    ? routeValues.reduce<number>((sum, value) => sum + (value ?? 0), 0)
+    : null;
 
   return {
-    ...split,
-    milesPrice: Number(miles.toFixed(2)),
-    mobilityTotalPrice: toMoney(mobilityPrice),
-    priceMethod: pickupCounty.priceMethod,
+    totalPrice: fundingSourceCharge,
+    passengerCoPay,
+    organizationContribution: fundingSourceCharge,
+    fundingSourceCharge,
+    milesPrice: Number(
+      legs.reduce((sum, leg) => sum + leg.billingMileage, 0).toFixed(2),
+    ),
+    mobilityTotalPrice: 0,
+    zoneCoPay: passengerCoPay,
+    priceMethod: legs[0]?.priceMethod,
     countyId: pickupCounty._id,
-    zone,
+    zone: outboundZone,
+    legs,
+    calculatedRouteMileage,
+    actualGpsMileage: gps,
+    straightLineMileage: Number(straightLineMileage.toFixed(4)),
+    billingMileage: Number(
+      legs.reduce((sum, leg) => sum + leg.billingMileage, 0).toFixed(4),
+    ),
+    billingMileageSource: legs[0]?.billingMileageSource ?? mileageSource,
+    cancellationOutcome: pickupCounty.chargeRules?.cancellation ?? "both",
+    noShowOutcome: pickupCounty.chargeRules?.noShow ?? "both",
   };
 };
 
-const FARE_KEYS = ["totalPrice", "organizationContribution"] as const;
+const FARE_KEYS = [
+  "totalPrice",
+  "organizationContribution",
+  "pricingLegs",
+  "fundingSourceCharge",
+] as const;
 
-/** Passenger responses keep `price` (the co-pay) and drop the organization fare. */
+/** Passenger responses keep `price` (the co-pay) and drop the funding-source fare. */
 export const presentBookingForViewer = <T>(booking: T, role?: string): T => {
-  if (role !== USER_ROLES.USER || !booking || Array.isArray(booking))
+  if (role !== USER_ROLES.USER || !booking || Array.isArray(booking)) {
     return booking;
+  }
   const source = booking as Record<string, unknown>;
   const copy: Record<string, unknown> = { ...source };
   for (const key of FARE_KEYS) delete copy[key];
   if (copy.passengerCoPay != null) copy.price = copy.passengerCoPay;
   return copy as T;
+};
+
+export const presentBookingsForViewer = <T>(data: T, role?: string): T => {
+  if (role !== USER_ROLES.USER || data == null) return data;
+  if (Array.isArray(data)) {
+    return data.map((item) => presentBookingForViewer(item, role)) as T;
+  }
+  return presentBookingForViewer(data, role);
+};
+
+export const presentQuoteForViewer = (quote: TripQuote, role?: string) => {
+  if (role !== USER_ROLES.USER) return quote;
+  return {
+    passengerCoPay: quote.passengerCoPay,
+    price: quote.passengerCoPay,
+    zone: quote.zone,
+  };
 };
 
 export const toBookingErrorMessage = (error: unknown) => {
@@ -362,13 +479,7 @@ const coPayAmount = (booking: { passengerCoPay?: number; price?: number }) =>
   booking.passengerCoPay ?? booking.price ?? 0;
 
 /**
- * PREVIOUS IMPLEMENTATION
- * Charged `price` (the full fare), incremented the rider trip count,
- * and wrote the booking before Stripe confirmed anything.
- * Calling this from status "completed" also finished the trip on payment.
- *
- * NEW IMPLEMENTATION
- * Charge only the co-pay. Reuse an open Checkout session.
+ * Charge only the passenger co-pay. Reuse an open Checkout session.
  * Do not change trip status and do not mark the payment paid here.
  */
 export const handlePayment = async (id: string) => {
@@ -443,15 +554,39 @@ export const applyServerFare = (
   payload: Partial<IBooking>,
   quote: TripQuote,
 ) => {
-  const flatRate = quote.priceMethod === "flat_rate";
-  const passengerCoPay = flatRate ? quote.zoneCoPay : quote.passengerCoPay;
-  const organizationContribution = flatRate
-    ? toMoney(quote.totalPrice - quote.zoneCoPay)
-    : quote.organizationContribution;
+  payload.totalPrice = quote.fundingSourceCharge;
+  payload.passengerCoPay = quote.passengerCoPay;
+  payload.organizationContribution = quote.fundingSourceCharge;
+  payload.price = quote.passengerCoPay;
+  payload.paymentStatus = quote.passengerCoPay <= 0 ? "paid" : "pending";
+  payload.calculatedRouteMileage = quote.calculatedRouteMileage;
+  payload.actualGpsMileage = quote.actualGpsMileage;
+  payload.straightLineMileage = quote.straightLineMileage;
+  payload.billingMileage = quote.billingMileage;
+  payload.billingMileageSource = quote.billingMileageSource;
+  payload.pricingLegs = quote.legs;
+  payload.cancellationOutcome = quote.cancellationOutcome;
+  payload.noShowOutcome = quote.noShowOutcome;
+  payload.countyId = quote.countyId;
+};
 
-  payload.totalPrice = quote.totalPrice;
-  payload.passengerCoPay = passengerCoPay;
-  payload.organizationContribution = organizationContribution;
-  payload.price = passengerCoPay;
-  payload.paymentStatus = passengerCoPay <= 0 ? "paid" : "pending";
+export const fareAfterChargeOutcome = (
+  fundingSourceCharge: number,
+  passengerCopay: number,
+  outcome: ChargeOutcome,
+) => {
+  const applied = applyChargeOutcome(
+    fundingSourceCharge,
+    passengerCopay,
+    outcome,
+  );
+  return {
+    totalPrice: toMoney(applied.fundingSourceCharge),
+    organizationContribution: toMoney(applied.fundingSourceCharge),
+    passengerCoPay: toMoney(applied.passengerCopay),
+    price: toMoney(applied.passengerCopay),
+    paymentStatus: (applied.passengerCopay <= 0 ? "paid" : "pending") as
+      | "paid"
+      | "pending",
+  };
 };

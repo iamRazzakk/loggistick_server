@@ -286,6 +286,35 @@ const createDriverAsAdminIntoDB = async (payload: IUser) => {
   return result;
 };
 
+const bannedUserAndDriverFromDB = async (
+  userId: string,
+  payload: Partial<IUser>,
+) => {
+  const isExistUser = await User.findById(userId)
+    .lean()
+    .select("isBanned role");
+  if (!isExistUser) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "User doesn't exist!");
+  }
+  if (isExistUser.role === USER_ROLES.SUPER_ADMIN) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      " Super admin can't be banned!",
+    );
+  }
+  const user = await User.findOneAndUpdate(
+    { _id: userId },
+    payload.isBanned ? { isBanned: true } : { isBanned: false },
+    {
+      new: true,
+    },
+  );
+  if (!user) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "User doesn't exist!");
+  }
+  return user;
+};
+
 export const UserService = {
   createUserToDB,
   getUserProfileFromDB,
@@ -297,4 +326,5 @@ export const UserService = {
   updateDispatcherRoutesIntoDB,
   getAllDispatchersFromDB,
   createDriverAsAdminIntoDB,
+  bannedUserAndDriverFromDB,
 };

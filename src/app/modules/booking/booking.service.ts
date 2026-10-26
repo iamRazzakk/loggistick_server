@@ -19,8 +19,11 @@ import { User } from "../user/user.model";
 import { USER_ROLES } from "../../../enums/user";
 import {
   applyServerFare,
+  fareAfterChargeOutcome,
   getTripPrice,
   handlePayment,
+  presentBookingForViewer,
+  presentBookingsForViewer,
   toBookingErrorMessage,
 } from "./booking.utils";
 import {
@@ -72,6 +75,8 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
   }
 
   payload.userId = new Types.ObjectId(payload.userId ?? user.id);
+  const riderId =
+    actor?.role === USER_ROLES.USER ? user.id : String(payload.userId);
   const quote = await getTripPrice({
     pickup: payload.pickupLocation as [number, number],
     dropoff: payload.dropOffLocation as [number, number],
@@ -82,16 +87,17 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
     countyId: (
       payload as IBooking & { countyId?: string }
     ).countyId?.toString(),
-    userId: user.id,
+    userId: riderId,
     tripType: payload.tripType,
     mobilityRequirements: payload.mobilityRequirements?.toString(),
+    serviceDate: payload.serviceDate,
+    actualGpsMileage: payload.actualGpsMileage,
   });
   applyServerFare(payload, quote);
 
-  payload.price = quote.totalPrice;
-
   if (!payload.recurringBooking) {
-    return await Booking.create(payload);
+    const created = await Booking.create(payload);
+    return presentBookingForViewer(created.toObject(), actor?.role);
   }
   if (!payload.endDate) {
     throw new ApiError(
@@ -137,7 +143,11 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
       },
     });
 
-    return await job.waitUntilFinished(bookingQueueEvents, JOB_WAIT_MS);
+    const created = await job.waitUntilFinished(
+      bookingQueueEvents,
+      JOB_WAIT_MS,
+    );
+    return presentBookingsForViewer(created, actor?.role);
   } catch (error) {
     await Booking.deleteMany({ recurringBatchId });
     throw new ApiError(StatusCodes.BAD_REQUEST, toBookingErrorMessage(error));
@@ -178,7 +188,10 @@ const getAllMyBookingsFromDB = async (
     qb.getPaginationInfo(),
   ]);
 
-  return { data, meta };
+  return {
+    data: presentBookingsForViewer(data, user.role),
+    meta,
+  };
 };
 
 // all pending bookings
@@ -279,7 +292,10 @@ const getTripHistoryFromDB = async (
     qb.getPaginationInfo(),
   ]);
 
-  return { data, meta };
+  return {
+    data: presentBookingsForViewer(data, _user.role),
+    meta,
+  };
 };
 
 // trip history get in excel file
@@ -314,10 +330,21 @@ const getTripHistoryInExcelFromDB = async (
     { header: "End Date", key: "endDate", width: 14 },
     { header: "Booking Status", key: "bookingStatus", width: 16 },
     { header: "Price", key: "price", width: 12 },
+    { header: "Passenger Copay", key: "passengerCoPay", width: 16 },
+    {
+      header: "Funding Source Charge",
+      key: "organizationContribution",
+      width: 24,
+    },
     { header: "Approval", key: "isApproved", width: 14 },
     { header: "Payment Status", key: "paymentStatus", width: 16 },
     { header: "Created At", key: "createdAt", width: 24 },
   ];
+  if (_user.role === USER_ROLES.USER) {
+    worksheet.columns = worksheet.columns.filter(
+      (column) => column.key !== "organizationContribution",
+    );
+  }
   bookings.forEach((booking) => {
     const rider = booking.userId as {
       firstName?: string;
@@ -348,6 +375,9 @@ const getTripHistoryInExcelFromDB = async (
       endDate: booking.endDate ?? "",
       bookingStatus: booking.bookingStatus,
       price: booking.price,
+      passengerCoPay: booking.passengerCoPay,
+      organizationContribution:
+        _user.role === USER_ROLES.USER ? "" : booking.organizationContribution,
       isApproved: booking.isApproved,
       paymentStatus: booking.paymentStatus,
       createdAt: (booking as any).createdAt
@@ -360,21 +390,95 @@ const getTripHistoryInExcelFromDB = async (
 };
 
 // update booking
+const PRICING_INPUTS = [
+  "pickupLocation",
+  "dropOffLocation",
+  "stopAddress",
+  "tripType",
+  "mobilityRequirements",
+  "payerSource",
+  "serviceDate",
+  "actualGpsMileage",
+  "countyId",
+] as const;
+
 const updateBookingInDB = async (
   id: string,
   payload: IBooking,
   user: JwtPayload,
 ) => {
-  if (payload.bookingStatus === "cancelled") {
-    payload.cancelledBy = new Types.ObjectId(user.id);
+  for (const key of LOCKED_FARE_FIELDS) {
+    delete payload[key];
   }
-  // for payment .....
   if (payload.bookingStatus === "completed") {
     const payment = await handlePayment(id);
     return {
       checkoutUrl: payment.checkoutUrl,
     };
   }
+
+  const existing = await Booking.findById(id);
+  if (!existing) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
+  }
+
+  const shouldReprice = PRICING_INPUTS.some(
+    (key) => payload[key] !== undefined,
+  );
+  if (shouldReprice) {
+    const merged = { ...existing.toObject(), ...payload };
+    const actor = await User.findById(user.id).select("role");
+    const riderId =
+      actor?.role === USER_ROLES.USER ? user.id : String(merged.userId);
+    const quote = await getTripPrice({
+      pickup: merged.pickupLocation as [number, number],
+      dropoff: merged.dropOffLocation as [number, number],
+      stop: merged.stopAddress?.length
+        ? (merged.stopAddress as [number, number])
+        : undefined,
+      payerId: merged.payerSource?.toString(),
+      countyId: (
+        merged as IBooking & { countyId?: string }
+      ).countyId?.toString(),
+      userId: riderId,
+      tripType: merged.tripType,
+      mobilityRequirements: merged.mobilityRequirements?.toString(),
+      serviceDate: merged.serviceDate,
+      actualGpsMileage: merged.actualGpsMileage,
+    });
+    applyServerFare(payload, quote);
+    if (
+      existing.paymentStatus === "paid" &&
+      payload.passengerCoPay === existing.passengerCoPay
+    ) {
+      payload.paymentStatus = "paid";
+    }
+  }
+
+  if (payload.bookingStatus === "cancelled") {
+    const outcome =
+      payload.cancellationOutcome ?? existing.cancellationOutcome ?? "both";
+    const fundingSourceCharge =
+      payload.organizationContribution ??
+      existing.organizationContribution ??
+      existing.totalPrice ??
+      0;
+    const passengerCopay =
+      payload.passengerCoPay ?? existing.passengerCoPay ?? 0;
+    const adjusted = fareAfterChargeOutcome(
+      fundingSourceCharge,
+      passengerCopay,
+      outcome,
+    );
+    if (passengerCopay > 0 && existing.paymentStatus === "paid") {
+      adjusted.paymentStatus = "paid";
+    }
+    Object.assign(payload, adjusted);
+    if (payload.bookingStatus === "cancelled") {
+      payload.cancelledBy = new Types.ObjectId(user.id);
+    }
+  }
+
   const booking = await Booking.findByIdAndUpdate(id, payload, { new: true });
   if (!booking) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
@@ -396,7 +500,7 @@ const updateBookingInDB = async (
       referenceId: booking._id.toString(),
     },
   });
-  return booking;
+  return presentBookingForViewer(booking.toObject(), user.role);
 };
 
 // get booking by id
@@ -420,7 +524,10 @@ const getBookingByIdFromDB = async (id: string, user: JwtPayload) => {
   } | null;
 
   if (!driver?._id) {
-    return { ...booking, driverRating: 0, totalTripCompleted: 0 };
+    return presentBookingForViewer(
+      { ...booking, driverRating: 0, totalTripCompleted: 0 },
+      user.role,
+    );
   }
 
   const [ratings, totalTripCompleted] = await Promise.all([
@@ -432,14 +539,17 @@ const getBookingByIdFromDB = async (id: string, user: JwtPayload) => {
     ? ratings.reduce((sum, row) => sum + row.rating, 0) / ratings.length
     : 0;
 
-  return {
-    ...booking,
-    driverId: {
-      ...driver,
-      driverRating,
-      totalTripCompleted,
+  return presentBookingForViewer(
+    {
+      ...booking,
+      driverId: {
+        ...driver,
+        driverRating,
+        totalTripCompleted,
+      },
     },
-  };
+    user.role,
+  );
 };
 
 // scheduled bookings
@@ -497,6 +607,8 @@ const calculateTotalTripPrice = async (
   mobilityRequirements?: string,
   countyId?: string,
   userId?: string,
+  serviceDate?: string,
+  actualGpsMileage?: number,
 ) => {
   return await getTripPrice({
     pickup: pickupLocation,
@@ -507,6 +619,8 @@ const calculateTotalTripPrice = async (
     userId,
     tripType,
     mobilityRequirements,
+    serviceDate,
+    actualGpsMileage,
   });
 };
 

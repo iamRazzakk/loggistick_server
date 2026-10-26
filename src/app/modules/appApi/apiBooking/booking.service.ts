@@ -3,6 +3,7 @@ import { JwtPayload } from "jsonwebtoken";
 import ApiError from "../../../../errors/ApiErrors";
 import { USER_ROLES } from "../../../../enums/user";
 import { Booking } from "../../booking/booking.model";
+import { presentBookingForViewer } from "../../booking/booking.utils";
 import { Types } from "mongoose";
 import { addDays, format } from "date-fns";
 import { Driverrating } from "../../driverrating/driverrating.model";
@@ -60,7 +61,9 @@ const getMyBookingsOnGoingDataFromDB = async (
     (booking as { isCancelledByYou?: boolean }).isCancelledByYou =
       cancelledBy != null && cancelledBy.equals(user.id!);
   }
-  return bookings;
+  return bookings.map((booking) =>
+    presentBookingForViewer(booking, user.role),
+  );
 };
 
 const getMyBookingDetailsDataFromDB = async (user: JwtPayload, id: string) => {
@@ -76,7 +79,7 @@ const getMyBookingDetailsDataFromDB = async (user: JwtPayload, id: string) => {
   }
   // @ts-ignore
   assertCanViewBooking(user, booking);
-  return booking;
+  return presentBookingForViewer(booking, user.role);
 };
 //  get all upcoming bookings
 
@@ -94,7 +97,9 @@ const getAllUpcomingBookingsFromDB = async (user: JwtPayload) => {
       select: "firstName lastName middleName profile contuct",
     })
     .lean();
-  return bookings[0];
+  return bookings[0]
+    ? presentBookingForViewer(bookings[0], user.role)
+    : bookings[0];
 };
 // need to show only completed bookings
 const getRecentActivityFromDB = async (user: JwtPayload) => {
@@ -108,7 +113,9 @@ const getRecentActivityFromDB = async (user: JwtPayload) => {
     .sort({ createdAt: -1 })
     .limit(1)
     .lean();
-  return bookings.length > 0 ? bookings[0] : [];
+  return bookings.length > 0
+    ? presentBookingForViewer(bookings[0], user.role)
+    : [];
 };
 
 const getDriverOverviewDataFromDB = async (user: JwtPayload) => {
@@ -125,12 +132,14 @@ const getDriverOverviewDataFromDB = async (user: JwtPayload) => {
         bookingStatus: "completed",
         driverId: new Types.ObjectId(user.id),
       })
-        .select("price")
+        .select("price organizationContribution passengerCoPay")
         .lean(),
     ]);
   const totalEarnings =
     totalEarningsAmount?.reduce(
-      (sum, row) => sum + (row?.passengerCoPay ?? row?.price ?? 0),
+      (sum, row) =>
+        sum +
+        (row?.organizationContribution ?? row?.passengerCoPay ?? row?.price ?? 0),
       0,
     ) ?? 0;
   return { totalTrips, totalCompletedTrips, totalEarnings };
@@ -153,7 +162,10 @@ const getUserOnGoingBookingTodayFromDB = async (user: JwtPayload) => {
   if (!booking) return [];
   const driverId = (booking?.driverId as { _id?: Types.ObjectId } | null)?._id;
   if (!driverId) {
-    return { ...booking, driverRating: 0, totalTripCompleted: 0 };
+    return presentBookingForViewer(
+      { ...booking, driverRating: 0, totalTripCompleted: 0 },
+      user.role,
+    );
   }
 
   const [ratings, totalTripCompleted] = await Promise.all([
@@ -168,14 +180,17 @@ const getUserOnGoingBookingTodayFromDB = async (user: JwtPayload) => {
     ? ratings.reduce((sum, row) => sum + row.rating, 0) / ratings.length
     : 0;
 
-  return {
-    ...booking,
-    driverId: {
-      ...(booking.driverId as object),
-      driverRating,
-      totalTripCompleted,
+  return presentBookingForViewer(
+    {
+      ...booking,
+      driverId: {
+        ...(booking.driverId as object),
+        driverRating,
+        totalTripCompleted,
+      },
     },
-  };
+    user.role,
+  );
 };
 
 // driver on current booking (Trip maybe today lot's of but we need to show most recent one)
@@ -227,7 +242,10 @@ const getDriverCurrentBookingFromDB = async (user: JwtPayload) => {
       })
     : 0;
 
-  return { ...currentBooking, completedTrips: completedTripCount };
+  return presentBookingForViewer(
+    { ...currentBooking, completedTrips: completedTripCount },
+    user.role,
+  );
 };
 
 // next 3 trips
@@ -259,7 +277,8 @@ const getDriverNextTripFromDB = async (user: JwtPayload) => {
       }
       return (toMinutes(a.pickupTime) ?? 0) - (toMinutes(b.pickupTime) ?? 0);
     })
-    .slice(0, 3);
+    .slice(0, 3)
+    .map((booking) => presentBookingForViewer(booking, user.role));
 };
 
 // Driver all trip list sort last create need to show in first
@@ -273,7 +292,9 @@ const getAllDriverTripsListFromDB = async (user: JwtPayload) => {
     })
     .sort({ createdAt: -1 })
     .lean();
-  return bookings ?? [];
+  return (bookings ?? []).map((booking) =>
+    presentBookingForViewer(booking, user.role),
+  );
 };
 
 // total Trip, completed trip, total paid

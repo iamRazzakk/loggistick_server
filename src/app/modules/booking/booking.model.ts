@@ -153,6 +153,11 @@ const bookingSchema = new Schema<IBooking, BookingModel>(
       type: String,
       required: false,
     },
+    countyId: {
+      type: Schema.Types.ObjectId,
+      ref: "County",
+      required: false,
+    },
     organizationContribution: {
       type: Number,
       required: false,
@@ -167,6 +172,22 @@ const bookingSchema = new Schema<IBooking, BookingModel>(
       type: Number,
       required: false,
       default: 0,
+    },
+    calculatedRouteMileage: { type: Number, required: false },
+    actualGpsMileage: { type: Number, required: false },
+    straightLineMileage: { type: Number, required: false },
+    billingMileage: { type: Number, required: false },
+    billingMileageSource: { type: String, required: false },
+    pricingLegs: { type: Schema.Types.Mixed, required: false },
+    cancellationOutcome: {
+      type: String,
+      enum: ["none", "passenger_only", "funding_source_only", "both"],
+      required: false,
+    },
+    noShowOutcome: {
+      type: String,
+      enum: ["none", "passenger_only", "funding_source_only", "both"],
+      required: false,
     },
   },
   {

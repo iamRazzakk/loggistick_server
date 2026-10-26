@@ -64,4 +64,5 @@ const apiRoutes = [
 ];
 
 apiRoutes.forEach((route) => router.use(route.path, route.route));
+
 export default router;

@@ -24,7 +24,11 @@ const getAllReportsFromDB = async (query: Record<string, any>) => {
     filter.tripId = { $in: tripIds };
   }
   const qb = new QueryBuilder(
-    Reports.find(filter).populate("tripId"),
+    Reports.find(filter).populate([
+      { path: "tripId", select: "tripType" },
+      { path: "reportedBy", select: "firstName middleName lastName email" },
+      { path: "userId", select: "firstName middleName lastName email" },
+    ]),
     restQuery,
   )
     .search(["reportStatus"])
