@@ -45,6 +45,7 @@ import {
 } from "../../../shared/tabularExport";
 import { runExportJob } from "../../../helpers/runExportJob";
 import { EXPORT_TRIP_HISTORY_JOB } from "../../../queue/export.queue";
+import { isDriverOnDuty } from "../driverduty/driverduty.cache";
 
 const JOB_WAIT_MS = 120_000;
 
@@ -370,6 +371,16 @@ const updateBookingInDB = async (
   payload: IBooking,
   user: JwtPayload,
 ) => {
+  if (payload.driverId) {
+    const onDuty = await isDriverOnDuty(String(payload.driverId));
+    if (!onDuty) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "This driver is currently off duty. Please assign another driver who is on duty.",
+      );
+    }
+  }
+
   for (const key of LOCKED_FARE_FIELDS) {
     delete payload[key];
   }
@@ -499,7 +510,7 @@ const getBookingByIdFromDB = async (id: string, user: JwtPayload) => {
   ]);
 
   const driverRating = ratings.length
-    ? ratings.reduce((sum, row) => sum + row.rating, 0) / ratings.length
+    ? ratings.reduce((sum, row) => sum + row?.rating, 0) / ratings.length
     : 0;
 
   return presentBookingForViewer(
