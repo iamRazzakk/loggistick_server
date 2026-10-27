@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeReadFile": [
+      {
+        "command": "node .cursor/hooks/block-secret-reads.js",
+        "failClosed": true,
+        "timeout": 10
+      }
+    ],
+    "beforeTabFileRead": [
+      {
+        "command": "node .cursor/hooks/block-secret-reads.js",
+        "failClosed": true,
+        "timeout": 10
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "node .cursor/hooks/block-secret-reads.js",
+        "failClosed": true,
+        "timeout": 10
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "node .cursor/hooks/block-secret-reads.js",
+        "matcher": "Read|Grep",
+        "failClosed": true,
+        "timeout": 10
+      }
+    ]
+  }
+}

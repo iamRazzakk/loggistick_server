@@ -1,0 +1,4 @@
+# Secret env files stay out of AI context. Example file stays readable.
+.env
+.env.*
+!.env.example

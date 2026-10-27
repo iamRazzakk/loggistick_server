@@ -174,12 +174,14 @@ const getAllMyBookingsFromDB = async (
         ? { driverId: id }
         : { $or: [{ userId: id }, { driverId: id }] };
 
+  const { serviceDate: _serviceDate, ...restQuery } = query;
+
   const qb = new QueryBuilder(
-    // need to check user or driver id
     Booking.find({
       ...mine,
+      serviceDate: { $gte: format(new Date(), "yyyy-MM-dd") },
     }),
-    query,
+    restQuery,
   )
     .fields()
     .filter()
@@ -214,12 +216,7 @@ const getAllBookingsFromDB = async (
 
   const bookingFilter = await buildPendingBookingFilter(query.searchTerm);
 
-  const qb = new QueryBuilder(
-    Booking.find(bookingFilter).select(
-      "userId driverId mobilityRequirements payerSource bookingStatus isApproved tripType tripReason serviceDate appointmentTime pickupTime returnTime passengerSeats price pickupLocation dropOffLocation stopAddress recurringBooking createdAt",
-    ),
-    safeQuery,
-  )
+  const qb = new QueryBuilder(Booking.find(bookingFilter), safeQuery)
     .filter()
     .sort()
     .paginate()
@@ -229,6 +226,13 @@ const getAllBookingsFromDB = async (
       mobilityRequirements: "name price icon",
       payerSource: "name type",
     });
+  qb.modelQuery = qb.modelQuery.populate([
+    {
+      path: "countyId",
+      select: "payersId",
+      populate: { path: "payersId", select: "name type" },
+    },
+  ]);
 
   const [data, meta] = await Promise.all([
     qb.modelQuery.lean().exec(),
