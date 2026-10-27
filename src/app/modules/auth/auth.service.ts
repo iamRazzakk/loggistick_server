@@ -47,6 +47,13 @@ const loginUserFromDB = async (payload: ILoginData) => {
     }
   }
 
+  if (user.isBanned) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "Your Account is Banned Please Contact Support!",
+    );
+  }
+
   // Password match check
   const isPasswordMatched = await User.isMatchPassword(password, user.password);
   if (!isPasswordMatched) {

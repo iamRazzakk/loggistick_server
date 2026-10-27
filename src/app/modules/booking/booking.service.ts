@@ -236,18 +236,28 @@ const getAllApprovedBookingsFromDB = async (
   user: JwtPayload,
   query: Record<string, any>,
 ) => {
-  const { searchTerm, ...restQuery } = query;
+  const { searchTerm, unassign, ...restQuery } = query;
   const bookingFilter = await buildApprovedBookingFilter(searchTerm);
+
+  // false / omitted: no extra filter. true: only bookings with no driver.
+  if (String(unassign).toLowerCase() === "true") {
+    delete bookingFilter.bookingStatus;
+    bookingFilter.driverId = { $in: [null] };
+  }
 
   const qb = new QueryBuilder(Booking.find(bookingFilter), restQuery)
     .filter()
-    .sort()
-    .populate(["userId", "mobilityRequirements", "payerSource", "driverId"], {
-      userId: "firstName lastName middleName profile",
-      mobilityRequirements: "name price icon",
-      payerSource: "name type",
-      driverId: "firstName lastName middleName",
-    });
+    .sort();
+  qb.modelQuery = qb.modelQuery.populate([
+    { path: "userId", select: "firstName lastName middleName profile" },
+    { path: "mobilityRequirements", select: "name price icon" },
+    { path: "driverId", select: "firstName lastName middleName" },
+    {
+      path: "countyId",
+      select: "payersId",
+      populate: { path: "payersId", select: "name type" },
+    },
+  ]);
   const [data, meta] = await Promise.all([
     qb.modelQuery.lean().exec(),
     qb.getPaginationInfo(),
@@ -266,6 +276,7 @@ const getTripHistoryFromDB = async (
     driverId: _driverId,
     payerSource: _payerSource,
     payerId: _payerId,
+    unassign,
     ...restQuery
   } = query;
 
@@ -274,6 +285,10 @@ const getTripHistoryFromDB = async (
   }
 
   const bookingFilter = await buildTripHistoryFilter(query);
+
+  if (String(unassign).toLowerCase() === "true") {
+    bookingFilter.driverId = { $in: [null] };
+  }
 
   const qb = new QueryBuilder(Booking.find(bookingFilter), restQuery)
     .filter()
