@@ -104,7 +104,7 @@ export const buildTripHistoryFilter = async (query: Record<string, any>) => {
 
 export const buildApprovedBookingFilter = async (searchTerm?: string) => {
   const filter: Record<string, unknown> = {
-    bookingStatus: "assigned",
+    bookingStatus: { $in: ["confirmed", "assigned"] },
     isApproved: "approved",
   };
   const term = String(searchTerm ?? "").trim();

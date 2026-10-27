@@ -1,3 +1,4 @@
+import { format } from "date-fns";
 import { StatusCodes } from "http-status-codes";
 import { Types } from "mongoose";
 import ApiError from "../../../errors/ApiErrors";
@@ -577,6 +578,61 @@ export const handlePayment = async (id: string) => {
   await existing.save();
 
   return { booking: existing.toObject(), checkoutUrl: session.url };
+};
+
+export const userDisplayName = (user?: {
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+} | null) =>
+  [user?.firstName, user?.middleName, user?.lastName]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(" ") || "A rider";
+
+const formatBookingDate = (value?: string) => {
+  if (!value) return "";
+  const isoDate = value.trim().slice(0, 10);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  if (match) {
+    return format(
+      new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
+      "MMM d, yyyy",
+    );
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return format(parsed, "MMM d, yyyy");
+};
+
+export const pendingBookingNotificationCopy = (
+  rider: {
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+  } | null,
+  booking: Pick<
+    IBooking,
+    | "pickupTime"
+    | "appointmentTime"
+    | "serviceDate"
+    | "endDate"
+    | "recurringBooking"
+  >,
+) => {
+  const name = userDisplayName(rider);
+  const pickupTime = booking.pickupTime?.trim();
+  const appointmentTime = booking.appointmentTime?.trim();
+  const startDate = formatBookingDate(booking.serviceDate);
+  const endDate = formatBookingDate(booking.endDate);
+
+  return {
+    text: `${name} booked a new trip`,
+    description:
+      booking.recurringBooking && endDate
+        ? `${name} booked a trip at ${pickupTime} from ${startDate} to ${endDate}.`
+        : `${name} booked a trip from ${pickupTime} to ${appointmentTime}.`,
+  };
 };
 
 export const applyServerFare = (

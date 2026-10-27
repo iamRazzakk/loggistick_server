@@ -21,11 +21,13 @@ import {
   fareAfterChargeOutcome,
   getTripPrice,
   handlePayment,
+  pendingBookingNotificationCopy,
   presentBookingForViewer,
   presentBookingsForViewer,
   toBookingErrorMessage,
 } from "./booking.utils";
 import {
+  notifyAdmins,
   sendNotifications,
   sendPushNotification,
 } from "../../../helpers/notificationsHelper";
@@ -60,7 +62,7 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
     payload.appointmentTime,
   );
   if (timeError) throw new ApiError(StatusCodes.BAD_REQUEST, timeError);
-  const actor = await User.findById(user.id).select("role");
+  const actor = await User.findById(user.id).select("role").lean();
 
   if (actor?.role === USER_ROLES.SUPER_ADMIN) {
     payload.isApproved = "approved";
@@ -102,8 +104,23 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
   });
   applyServerFare(payload, quote);
 
+  const notifyAdminOfPendingBooking = async (referenceId: string) => {
+    if (actor?.role === USER_ROLES.SUPER_ADMIN) return;
+    const rider = await User.findById(payload.userId)
+      .select("firstName middleName lastName")
+      .lean();
+    const copy = pendingBookingNotificationCopy(rider, payload);
+    await notifyAdmins({
+      sender: user.id,
+      text: copy.text,
+      description: copy.description,
+      referenceId,
+    });
+  };
+
   if (!payload.recurringBooking) {
     const created = await Booking.create(payload);
+    await notifyAdminOfPendingBooking(created._id.toString());
     return presentBookingForViewer(created.toObject(), actor?.role);
   }
   if (!payload.endDate) {
@@ -154,6 +171,7 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
       bookingQueueEvents,
       JOB_WAIT_MS,
     );
+    await notifyAdminOfPendingBooking(recurringBatchId);
     return presentBookingsForViewer(created, actor?.role);
   } catch (error) {
     await Booking.deleteMany({ recurringBatchId });
@@ -250,10 +268,11 @@ const getAllApprovedBookingsFromDB = async (
   const { searchTerm, unassign, ...restQuery } = query;
   const bookingFilter = await buildApprovedBookingFilter(searchTerm);
 
-  // false / omitted: no extra filter. true: only bookings with no driver.
-  if (String(unassign).toLowerCase() === "true") {
-    delete bookingFilter.bookingStatus;
-    bookingFilter.driverId = { $in: [null] };
+  if (unassign !== undefined && String(unassign).trim() !== "") {
+    const isUnassigned = String(unassign).toLowerCase() === "true";
+    bookingFilter.driverId = isUnassigned
+      ? { $in: [null] }
+      : { $exists: true, $ne: null };
   }
 
   const qb = new QueryBuilder(Booking.find(bookingFilter), restQuery)

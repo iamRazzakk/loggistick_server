@@ -1,5 +1,7 @@
+import { USER_ROLES } from "../enums/user";
 import { INotification } from "../app/modules/notification/notification.interface";
 import { Notification } from "../app/modules/notification/notification.model";
+import { User } from "../app/modules/user/user.model";
 import {
   pushNotificationQueue,
   SEND_PUSH_NOTIFICATION_JOB,
@@ -16,6 +18,42 @@ export const sendNotifications = async (data: any): Promise<INotification> => {
   }
 
   return result;
+};
+
+type NotifyAdminsInput = {
+  sender: string;
+  text: string;
+  description?: string;
+  referenceId: string;
+  screen?: INotification["screen"];
+  type?: INotification["type"];
+};
+
+export const notifyAdmins = async ({
+  sender,
+  text,
+  description,
+  referenceId,
+  screen = "booking",
+  type = "user",
+}: NotifyAdminsInput) => {
+  const admin = await User.findOne({
+    role: USER_ROLES.SUPER_ADMIN,
+    isBanned: { $ne: true },
+    _id: { $ne: sender },
+  }).select("_id");
+
+  if (!admin) return;
+
+  await sendNotifications({
+    receiver: admin._id,
+    sender,
+    text,
+    description,
+    referenceId,
+    screen,
+    type,
+  });
 };
 
 type SendPushNotificationInput = {
