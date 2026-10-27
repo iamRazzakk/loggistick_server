@@ -3,6 +3,7 @@ import { PaymentServices } from "./payment.service";
 import { StatusCodes } from "http-status-codes";
 import catchAsync from "../../../shared/catchAsync";
 import sendResponse from "../../../shared/sendResponse";
+import { sendDownload } from "../../../helpers/sendDownload";
 const getAllPayments = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const data = await PaymentServices.getAllPaymentsFromDB(req.query);
@@ -28,18 +29,11 @@ const getPaymentOverView = catchAsync(
   },
 );
 const exportAllPaymentsDataInExcelFormat = catchAsync(
-  async (_req: Request, res: Response) => {
-    const buffer =
-      await PaymentServices.exportAllPaymentsDataInExcelFormatFromDB();
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  async (req: Request, res: Response) => {
+    const file = await PaymentServices.exportAllPaymentsDataInExcelFormatFromDB(
+      req.query,
     );
-    res.setHeader(
-      "Content-Disposition",
-      'attachment; filename="payments.xlsx"',
-    );
-    res.status(StatusCodes.OK).send(Buffer.from(buffer));
+    sendDownload(res, file);
   },
 );
 export const PaymentController = {

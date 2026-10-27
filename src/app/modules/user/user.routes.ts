@@ -12,7 +12,6 @@ import {
 } from "../../middlewares/fileUploaderHandlar";
 import { parseRequestBody } from "../../middlewares/parseBody";
 import { parseBody } from "../../../util/parse";
-import { fileUploadHandler } from "../../../shared/fileUploadHandler";
 
 const router = express.Router();
 

@@ -8,7 +8,6 @@ import { generateRecurringDates } from "../../../util/recurringBooking";
 import { Types } from "mongoose";
 import { format } from "date-fns";
 import { randomUUID } from "crypto";
-import ExcelJS from "exceljs";
 
 import {
   bookingQueue,
@@ -39,6 +38,13 @@ import {
 } from "./booking.query";
 import { LOCKED_FARE_FIELDS } from "./booking.constant";
 import { pickupAppointmentError } from "../appApi/apiBooking/booking.helper";
+import { TripHistoryBooking, tripHistoryTable } from "./booking.export";
+import {
+  exportTypeFromQuery,
+  writeTabularExport,
+} from "../../../shared/tabularExport";
+import { runExportJob } from "../../../helpers/runExportJob";
+import { EXPORT_TRIP_HISTORY_JOB } from "../../../queue/export.queue";
 
 const JOB_WAIT_MS = 120_000;
 
@@ -313,96 +319,38 @@ const getTripHistoryFromDB = async (
   };
 };
 
-// trip history get in excel file
-const getTripHistoryInExcelFromDB = async (
-  _user: JwtPayload,
+export const buildTripHistoryFile = async (
+  role: string | undefined,
   query: Record<string, any>,
 ) => {
   const bookingFilter = await buildTripHistoryFilter(query);
+  if (String(query.unassign ?? "").toLowerCase() === "true") {
+    bookingFilter.driverId = { $in: [null] };
+  }
   const bookings = await Booking.find(bookingFilter)
     .sort(query.sort || "-serviceDate")
-    .populate("userId", "firstName middleName lastName profile")
-    .populate("driverId", "firstName middleName lastName profile")
+    .populate([
+      { path: "userId", select: "firstName lastName" },
+      { path: "driverId", select: "firstName lastName" },
+      { path: "mobilityRequirements", select: "name" },
+      { path: "payerSource", select: "name type" },
+    ])
     .lean();
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet("Trip History");
-  worksheet.columns = [
-    { header: "Booking Id", key: "bookingId", width: 28 },
-    { header: "Rider", key: "rider", width: 24 },
-    { header: "Driver", key: "driver", width: 24 },
-    { header: "Pickup", key: "pickupLocation", width: 22 },
-    { header: "Drop Off", key: "dropOffLocation", width: 22 },
-    { header: "Stop", key: "stopAddress", width: 22 },
-    { header: "Trip Type", key: "tripType", width: 14 },
-    { header: "Trip Reason", key: "tripReason", width: 18 },
-    { header: "Passenger Seats", key: "passengerSeats", width: 16 },
-    { header: "Service Date", key: "serviceDate", width: 16 },
-    { header: "Appointment Time", key: "appointmentTime", width: 18 },
-    { header: "Pickup Time", key: "pickupTime", width: 14 },
-    { header: "Return Time", key: "returnTime", width: 14 },
-    { header: "Recurring", key: "recurringBooking", width: 12 },
-    { header: "Selected Days", key: "selectedDate", width: 28 },
-    { header: "End Date", key: "endDate", width: 14 },
-    { header: "Booking Status", key: "bookingStatus", width: 16 },
-    { header: "Price", key: "price", width: 12 },
-    { header: "Passenger Copay", key: "passengerCoPay", width: 16 },
-    {
-      header: "Funding Source Charge",
-      key: "organizationContribution",
-      width: 24,
-    },
-    { header: "Approval", key: "isApproved", width: 14 },
-    { header: "Payment Status", key: "paymentStatus", width: 16 },
-    { header: "Created At", key: "createdAt", width: 24 },
-  ];
-  if (_user.role === USER_ROLES.USER) {
-    worksheet.columns = worksheet.columns.filter(
-      (column) => column.key !== "organizationContribution",
-    );
-  }
-  bookings.forEach((booking) => {
-    const rider = booking.userId as {
-      firstName?: string;
-      middleName?: string;
-      lastName?: string;
-    } | null;
-    const driver = booking.driverId as {
-      firstName?: string;
-      middleName?: string;
-      lastName?: string;
-    } | null;
-    worksheet.addRow({
-      bookingId: String(booking._id),
-      rider: (rider?.firstName, rider?.middleName, rider?.lastName),
-      driver: (driver?.firstName, driver?.middleName, driver?.lastName),
-      pickupLocation: (booking.pickupLocation ?? []).join(", "),
-      dropOffLocation: (booking.dropOffLocation ?? []).join(", "),
-      stopAddress: (booking.stopAddress ?? []).join(", "),
-      tripType: booking.tripType,
-      tripReason: booking.tripReason,
-      passengerSeats: booking.passengerSeats,
-      serviceDate: booking.serviceDate,
-      appointmentTime: booking.appointmentTime,
-      pickupTime: booking.pickupTime,
-      returnTime: booking.returnTime ?? "",
-      recurringBooking: booking.recurringBooking ? "yes" : "no",
-      selectedDate: ((booking.selectedDate as string[]) ?? []).join(", "),
-      endDate: booking.endDate ?? "",
-      bookingStatus: booking.bookingStatus,
-      price: booking.price,
-      passengerCoPay: booking.passengerCoPay,
-      organizationContribution:
-        _user.role === USER_ROLES.USER ? "" : booking.organizationContribution,
-      isApproved: booking.isApproved,
-      paymentStatus: booking.paymentStatus,
-      createdAt: (booking as any).createdAt
-        ? new Date((booking as any).createdAt).toISOString()
-        : "",
-    });
+
+  return writeTabularExport({
+    format: exportTypeFromQuery(query),
+    ...tripHistoryTable(bookings as TripHistoryBooking[], role),
   });
-  worksheet.getRow(1).font = { bold: true };
-  return workbook.xlsx.writeBuffer().then((buffer: any) => Buffer.from(buffer));
 };
+
+const getTripHistoryInExcelFromDB = (
+  user: JwtPayload,
+  query: Record<string, any>,
+) =>
+  runExportJob(EXPORT_TRIP_HISTORY_JOB, {
+    role: user.role,
+    query,
+  });
 
 // update booking
 const PRICING_INPUTS = [

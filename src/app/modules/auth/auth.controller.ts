@@ -103,6 +103,19 @@ const resendVerificationEmail = catchAsync(
   },
 );
 
+const getSingleUserDetails = catchAsync(
+  async (req: Request, res: Response) => {
+    const result = await AuthService.getSingleUserDetailsFromDB(req.params.id);
+
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: "User details retrieved successfully",
+      data: result,
+    });
+  },
+);
+
 // delete user
 const deleteUser = catchAsync(async (req: Request, res: Response) => {
   const result = await AuthService.deleteUserFromDB(
@@ -126,5 +139,6 @@ export const AuthController = {
   changePassword,
   newAccessToken,
   resendVerificationEmail,
+  getSingleUserDetails,
   deleteUser,
 };

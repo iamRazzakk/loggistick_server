@@ -7,11 +7,17 @@ import { redisService } from "../../../redis/redis.service";
 const createRuleToDB = async (rule: IRule) => {
   const existingRule = await Rule.findOne({ type: rule.type });
   if (existingRule) {
-    await existingRule.updateOne(rule);
-    return existingRule;
+    const updated = await Rule.findOneAndUpdate(
+      { type: rule.type },
+      { $set: { content: rule.content } },
+      { new: true },
+    ).lean();
+    await redisService.del(`rule:${rule.type}`);
+    return updated;
   }
+  const created = await Rule.create(rule);
   await redisService.del(`rule:${rule.type}`);
-  return await Rule.create(rule);
+  return created;
 };
 
 const getRuleFromDB = async (type: "privacy" | "terms" | "about") => {

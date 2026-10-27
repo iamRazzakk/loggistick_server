@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import { StatusCodes } from "http-status-codes";
 import { JwtPayload } from "jsonwebtoken";
+import { Types } from "mongoose";
 import config from "../../../config";
 import ApiError from "../../../errors/ApiErrors";
 import { emailHelper } from "../../../helpers/emailHelper";
@@ -19,6 +20,7 @@ import { jwtHelpers } from "../../../helpers/jwtHelper";
 import { redisService } from "../../../redis/redis.service";
 import { USER_ROLES } from "../../../enums/user";
 import { setDispatcherRoutes } from "../../../helpers/dispatcherRouteCache";
+import { Booking } from "../booking/booking.model";
 
 //login
 const loginUserFromDB = async (payload: ILoginData) => {
@@ -357,6 +359,50 @@ const deleteUserFromDB = async (user: JwtPayload, password: string) => {
   return;
 };
 
+// single user details
+const getSingleUserDetailsFromDB = async (id: string) => {
+  if (!Types.ObjectId.isValid(id)) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
+  }
+
+  const userId = new Types.ObjectId(id);
+
+  const [user, bookingTotals] = await Promise.all([
+    User.findById(userId).lean(),
+    Booking.aggregate<{
+      totalRiderAmount: number;
+      totalOrganizationAmount: number;
+    }>([
+      { $match: { userId } },
+      {
+        $group: {
+          _id: null,
+          totalRiderAmount: {
+            $sum: { $ifNull: ["$passengerCoPay", { $ifNull: ["$price", 0] }] },
+          },
+          totalOrganizationAmount: {
+            $sum: { $ifNull: ["$organizationContribution", 0] },
+          },
+        },
+      },
+    ]),
+  ]);
+
+  if (!user) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
+  }
+
+  const totalRiderAmount = bookingTotals[0]?.totalRiderAmount ?? 0;
+  const totalOrganizationAmount = bookingTotals[0]?.totalOrganizationAmount ?? 0;
+
+  return {
+    ...user,
+    totalRiderAmount,
+    totalOrganizationAmount,
+    totalAmount: totalRiderAmount + totalOrganizationAmount,
+  };
+};
+
 export const AuthService = {
   verifyEmailToDB,
   loginUserFromDB,
@@ -367,4 +413,5 @@ export const AuthService = {
   resendVerificationEmailToDB,
   // socialLoginFromDB,
   deleteUserFromDB,
+  getSingleUserDetailsFromDB,
 };

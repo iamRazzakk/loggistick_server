@@ -57,7 +57,7 @@ const activeTripsFromDB = async (query: Record<string, any>) => {
 
   return {
     meta,
-    data,
+    data: data.slice(0, 5),
   };
 };
 

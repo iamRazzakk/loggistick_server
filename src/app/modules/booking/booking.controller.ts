@@ -5,6 +5,7 @@ import sendResponse from "../../../shared/sendResponse";
 import { StatusCodes } from "http-status-codes";
 import { USER_ROLES } from "../../../enums/user";
 import { presentQuoteForViewer } from "./booking.utils";
+import { sendDownload } from "../../../helpers/sendDownload";
 
 const createBooking = catchAsync(async (req: Request, res: Response) => {
   const booking = await BookingServices.createBookingIntoDB(req.user, req.body);
@@ -75,19 +76,11 @@ const getTripHistory = catchAsync(async (req: Request, res: Response) => {
 
 const getTripHistoryInExcel = catchAsync(
   async (req: Request, res: Response) => {
-    const buffer = await BookingServices.getTripHistoryInExcelFromDB(
+    const file = await BookingServices.getTripHistoryInExcelFromDB(
       req.user,
       req.query,
     );
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    );
-    res.setHeader(
-      "Content-Disposition",
-      'attachment; filename="trip-history.xlsx"',
-    );
-    res.status(StatusCodes.OK).send(buffer);
+    sendDownload(res, file);
   },
 );
 

@@ -71,6 +71,13 @@ router.post(
   AuthController.changePassword,
 );
 
+router.get(
+  "/user/:id",
+  auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+  checkDispatcherRoute("/riders"),
+  AuthController.getSingleUserDetails,
+);
+
 router.delete(
   "/delete-account",
   auth(USER_ROLES.SUPER_ADMIN),

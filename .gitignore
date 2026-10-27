@@ -1,6 +1,7 @@
 node_modules
 bench/results/
 uploads
+exports
 /winston
 dist
 SECURITY.md

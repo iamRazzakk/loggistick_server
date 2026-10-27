@@ -62,7 +62,7 @@ router
     checkDispatcherRoute("/trips"),
     BookingController.getTripHistory,
   );
-// trip history in excel API
+// trip history file: ?type=excel | csv | pdf
 router
   .route("/history/excel")
   .get(

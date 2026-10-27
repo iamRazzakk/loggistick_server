@@ -1,9 +1,12 @@
-import ApiError from "../../../errors/ApiErrors";
-import { logger } from "../../../shared/logger";
 import QueryBuilder from "../../builder/queryBuilder";
 import { Payment } from "./payment.model";
-import ExcelJS from "exceljs";
-import { StatusCodes } from "http-status-codes";
+import { PaymentExportRow, paymentTable } from "./payment.export";
+import {
+  exportTypeFromQuery,
+  writeTabularExport,
+} from "../../../shared/tabularExport";
+import { runExportJob } from "../../../helpers/runExportJob";
+import { EXPORT_PAYMENTS_JOB } from "../../../queue/export.queue";
 
 const getAllPaymentsFromDB = async (query: Record<string, any>) => {
   const qb = new QueryBuilder(Payment.find(), query)
@@ -29,65 +32,19 @@ const getPaymentOverViewFromDB = async () => {
   return totalAmount;
 };
 
-// export all data in excel formate
-const exportAllPaymentsDataInExcelFormatFromDB = async () => {
+export const buildPaymentFile = async (query: Record<string, any>) => {
   const payments = await Payment.find()
-    .populate("userId", "email firstName middleName lastName")
+    .populate("userId", "email firstName lastName")
     .lean();
 
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet("Payments");
-
-  worksheet.columns = [
-    { header: "Txn Number", key: "txnNumber", width: 24 },
-    { header: "Price", key: "price", width: 12 },
-    { header: "Payment Status", key: "paymentStatus", width: 18 },
-    { header: "User Email", key: "userEmail", width: 28 },
-    { header: "User Name", key: "userName", width: 24 },
-    { header: "Booking Id", key: "bookingId", width: 28 },
-    { header: "Created At", key: "createdAt", width: 22 },
-  ];
-
-  payments.forEach((payment) => {
-    const user = payment.userId as {
-      email?: string;
-      firstName?: string;
-      middleName?: string;
-      lastName?: string;
-    } | null;
-
-    const userName = [user?.firstName, user?.middleName, user?.lastName]
-      .filter(Boolean)
-      .join(" ");
-
-    worksheet.addRow({
-      txnNumber: payment.txnNumber,
-      price: payment.price,
-      paymentStatus: payment.paymentStatus,
-      userEmail: user?.email ?? "",
-      userName,
-      bookingId: String(payment.bookingId),
-      createdAt: (payment as any).createdAt
-        ? new Date((payment as any).createdAt).toISOString()
-        : "",
-    });
+  return writeTabularExport({
+    format: exportTypeFromQuery(query),
+    ...paymentTable(payments as PaymentExportRow[]),
   });
-
-  worksheet.getRow(1).font = { bold: true };
-
-  return workbook.xlsx
-    .writeBuffer()
-    .then((buffer) => Buffer.from(buffer).toString("base64"))
-    .catch((error) => {
-      logger.error(
-        `Error exporting all payments data in excel format: ${error}`,
-      );
-      throw new ApiError(
-        StatusCodes.INTERNAL_SERVER_ERROR,
-        "Error exporting all payments data in excel format",
-      );
-    });
 };
+
+const exportAllPaymentsDataInExcelFormatFromDB = (query: Record<string, any>) =>
+  runExportJob(EXPORT_PAYMENTS_JOB, { query });
 
 export const PaymentServices = {
   getAllPaymentsFromDB,

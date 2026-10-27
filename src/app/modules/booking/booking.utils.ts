@@ -90,10 +90,15 @@ const drivingMiles = async (from: LngLat, to: LngLat) => {
       `&units=imperial&key=${encodeURIComponent(key)}`;
     const response = await fetch(url, { signal: controller.signal });
     const body = (await response.json()) as {
-      rows?: { elements?: { status?: string; distance?: { value?: number } }[] }[];
+      rows?: {
+        elements?: { status?: string; distance?: { value?: number } }[];
+      }[];
     };
     const element = body.rows?.[0]?.elements?.[0];
-    if (element?.status !== "OK" || typeof element.distance?.value !== "number") {
+    if (
+      element?.status !== "OK" ||
+      typeof element.distance?.value !== "number"
+    ) {
       return null;
     }
     return element.distance.value / 1609.344;
@@ -107,7 +112,10 @@ const drivingMiles = async (from: LngLat, to: LngLat) => {
 const measurePath = async (points: LngLat[], wantRoute: boolean) => {
   const straightLineMileage = straightLineMiles(points);
   if (!wantRoute) {
-    return { straightLineMileage, calculatedRouteMileage: null as number | null };
+    return {
+      straightLineMileage,
+      calculatedRouteMileage: null as number | null,
+    };
   }
   let route = 0;
   for (let i = 1; i < points.length; i += 1) {
@@ -123,7 +131,8 @@ const measurePath = async (points: LngLat[], wantRoute: boolean) => {
 type PricingCounty = { _id: Types.ObjectId } & ICounty;
 
 const serviceDayOf = (serviceDate?: string) => {
-  if (serviceDate && /^\d{4}-\d{2}-\d{2}$/.test(serviceDate)) return serviceDate;
+  if (serviceDate && /^\d{4}-\d{2}-\d{2}$/.test(serviceDate))
+    return serviceDate;
   return new Date().toISOString().slice(0, 10);
 };
 
@@ -148,7 +157,11 @@ const effectiveFilter = (serviceDay: string) => ({
   ],
 });
 
-const findCountyForPoint = (point: LngLat, payerId: string | undefined, serviceDay: string) => {
+const findCountyForPoint = (
+  point: LngLat,
+  payerId: string | undefined,
+  serviceDay: string,
+) => {
   const filter: Record<string, unknown> = {
     isActive: true,
     ...effectiveFilter(serviceDay),
@@ -161,7 +174,9 @@ const findCountyForPoint = (point: LngLat, payerId: string | undefined, serviceD
   if (payerId && Types.ObjectId.isValid(payerId)) {
     filter.payersId = new Types.ObjectId(payerId);
   }
-  return County.findOne(filter).sort({ effectiveFrom: -1 }).lean<PricingCounty>();
+  return County.findOne(filter)
+    .sort({ effectiveFrom: -1 })
+    .lean<PricingCounty>();
 };
 
 const loadActiveCounty = (countyId: string) =>
@@ -267,9 +282,13 @@ const rateCardFor = (
   return {
     priceMethod: selected.priceMethod,
     flat_rate_price: selected.flat_rate_price ?? county.flat_rate_price,
-    base_rate: selected.base_rate ?? county.base_rate ?? county.starting_fare ?? 0,
+    base_rate:
+      selected.base_rate ?? county.base_rate ?? county.starting_fare ?? 0,
     per_mile_rate:
-      selected.per_mile_rate ?? county.per_mile_rate ?? county.per_mile_price ?? 0,
+      selected.per_mile_rate ??
+      county.per_mile_rate ??
+      county.per_mile_price ??
+      0,
     mileage_brackets: selected.mileage_brackets?.length
       ? selected.mileage_brackets
       : legacyBrackets,
@@ -326,7 +345,8 @@ export const getTripPrice = async (input: {
     pickupCounty,
     input.mobilityRequirements,
   );
-  const mileageSource: MileageSource = pickupCounty.mileageSource ?? "straight_line";
+  const mileageSource: MileageSource =
+    pickupCounty.mileageSource ?? "straight_line";
   const rounding = pickupCounty.mileageRounding ?? "none";
   const precision = pickupCounty.mileagePrecision ?? 2;
   const wantRoute = mileageSource === "calculated_route";
@@ -335,15 +355,21 @@ export const getTripPrice = async (input: {
       ? input.actualGpsMileage
       : null;
 
-  const paths: { leg: PricedLeg["leg"]; zone: ZoneName; points: LngLat[]; gps: number | null }[] =
-    [
-      {
-        leg: "outbound",
-        zone: outboundZone,
-        points: input.stop ? [input.pickup, input.stop, input.dropoff] : [input.pickup, input.dropoff],
-        gps: input.tripType === "round-trip" ? null : gps,
-      },
-    ];
+  const paths: {
+    leg: PricedLeg["leg"];
+    zone: ZoneName;
+    points: LngLat[];
+    gps: number | null;
+  }[] = [
+    {
+      leg: "outbound",
+      zone: outboundZone,
+      points: input.stop
+        ? [input.pickup, input.stop, input.dropoff]
+        : [input.pickup, input.dropoff],
+      gps: input.tripType === "round-trip" ? null : gps,
+    },
+  ];
   if (input.tripType === "round-trip") {
     paths.push({
       leg: "return",
@@ -394,7 +420,10 @@ export const getTripPrice = async (input: {
   const passengerCoPay = toMoney(
     legs.reduce((sum, leg) => sum + leg.passengerCoPay, 0),
   );
-  const straightLineMileage = legs.reduce((sum, leg) => sum + leg.straightLineMileage, 0);
+  const straightLineMileage = legs.reduce(
+    (sum, leg) => sum + leg.straightLineMileage,
+    0,
+  );
   const routeValues = legs.map((leg) => leg.calculatedRouteMileage);
   const calculatedRouteMileage = routeValues.every((value) => value != null)
     ? routeValues.reduce<number>((sum, value) => sum + (value ?? 0), 0)
