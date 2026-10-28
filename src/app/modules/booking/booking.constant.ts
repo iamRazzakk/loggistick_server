@@ -7,6 +7,7 @@ export const BOOKING_STATUSES = [
   "in-progress",
   "confirmed",
   "cancelled",
+  "trip-started",
   "trip-completed",
   "completed",
 ] as const;
@@ -41,10 +42,7 @@ export const STAFF = new Set<string>([
   USER_ROLES.SUPER_ADMIN,
   USER_ROLES.DISPATCHER,
 ]);
-
-
-
-
+// @ts-ignore
 export const NEXT_STATUS: Record<
   IBooking["bookingStatus"],
   IBooking["bookingStatus"][]

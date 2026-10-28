@@ -580,11 +580,13 @@ export const handlePayment = async (id: string) => {
   return { booking: existing.toObject(), checkoutUrl: session.url };
 };
 
-export const userDisplayName = (user?: {
-  firstName?: string;
-  middleName?: string;
-  lastName?: string;
-} | null) =>
+export const userDisplayName = (
+  user?: {
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+  } | null,
+) =>
   [user?.firstName, user?.middleName, user?.lastName]
     .map((part) => part?.trim())
     .filter(Boolean)

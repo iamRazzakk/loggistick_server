@@ -189,6 +189,14 @@ const bookingSchema = new Schema<IBooking, BookingModel>(
       enum: ["none", "passenger_only", "funding_source_only", "both"],
       required: false,
     },
+    driverArrivedAt: {
+      type: String,
+      required: false,
+    },
+    driverPicupAt: {
+      type: String,
+      required: false,
+    },
   },
   {
     timestamps: true,

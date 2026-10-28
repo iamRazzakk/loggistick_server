@@ -408,6 +408,14 @@ const updateBookingInDB = async (
   for (const key of LOCKED_FARE_FIELDS) {
     delete payload[key];
   }
+
+  if (payload.bookingStatus === "confirmed") {
+    payload.driverArrivedAt = format(new Date(), "yyyy-MM-dd HH:mm:ss");
+  }
+  if (payload.bookingStatus === "trip-started") {
+    payload.driverPicupAt = format(new Date(), "yyyy-MM-dd HH:mm:ss");
+  }
+
   if (payload.bookingStatus === "completed") {
     const payment = await handlePayment(id);
     return {

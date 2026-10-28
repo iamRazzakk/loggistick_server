@@ -59,6 +59,8 @@ export type IBooking = {
   stripeCheckoutSessionId?: string;
   countyId?: Types.ObjectId;
   cancelledBy?: Types.ObjectId;
+  driverArrivedAt?: string;
+  driverPicupAt?: string;
 };
 
 export type BookingModel = Model<IBooking>;

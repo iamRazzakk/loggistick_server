@@ -152,7 +152,9 @@ const getUserOnGoingBookingTodayFromDB = async (user: JwtPayload) => {
   const booking = await Booking.findOne({
     userId: new Types.ObjectId(user.id),
     serviceDate: today,
-    bookingStatus: { $nin: ["cancelled", "completed", "pending", "trip-completed"] },
+    bookingStatus: {
+      $nin: ["cancelled", "completed", "pending"],
+    },
   })
     .populate({
       path: "driverId",
@@ -180,7 +182,6 @@ const getUserOnGoingBookingTodayFromDB = async (user: JwtPayload) => {
   const driverRating = ratings.length
     ? ratings.reduce((sum, row) => sum + row.rating, 0) / ratings.length
     : 0;
-
   return presentBookingForViewer(
     {
       ...booking,
