@@ -84,11 +84,13 @@ const getAllVehiclesFromDB = async (query: Record<string, unknown> = {}) => {
 };
 
 const getSingleVehicleFromDB = async (id: string) => {
-  const data = await Vehicle.findById(id).lean();
-  if (!data) {
+  const vehicle = await Vehicle.findById(id).lean();
+  if (!vehicle) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Vehicle not found");
   }
-  return data;
+
+  const [vehicleWithDriver] = await attachAssignedDriver([vehicle]);
+  return vehicleWithDriver;
 };
 
 const updateVehicleInDB = async (id: string, payload: IVehicle) => {

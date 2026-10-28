@@ -29,6 +29,7 @@ const vehicleAssignSchema = new Schema<IVehicleAssign, VehicleAssignModel>(
 );
 
 vehicleAssignSchema.index({ driverId: 1, vehicleId: 1 }, { unique: true });
+
 export const VehicleAssign = model<IVehicleAssign, VehicleAssignModel>(
   "VehicleAssign",
   vehicleAssignSchema,

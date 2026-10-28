@@ -198,6 +198,7 @@ const getAllMyBookingsFromDB = async (
     Booking.find({
       ...mine,
       serviceDate: { $gte: format(new Date(), "yyyy-MM-dd") },
+      bookingStatus: { $nin: ["completed", "cancelled"] },
     }),
     restQuery,
   )

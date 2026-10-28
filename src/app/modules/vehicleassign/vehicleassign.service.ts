@@ -4,6 +4,8 @@ import { VehicleAssign } from "./vehicleassign.model";
 import { Types } from "mongoose";
 import QueryBuilder from "../../builder/queryBuilder";
 import { Driverrating } from "../driverrating/driverrating.model";
+import ApiError from "../../../errors/ApiErrors";
+import { StatusCodes } from "http-status-codes";
 
 const createVehicleAssignIntoDB = async (
   user: JwtPayload,
@@ -49,32 +51,84 @@ const getAllVehicleAssignsFromDB = async (query: Record<string, unknown>) => {
   return { data: enriched, meta };
 };
 
-const getSingleVehicleAssignFromDB = async (id: string) => {
-  const data = await VehicleAssign.findById(id)
+const getSingleVehicleAssignFromDB = async (vehicleAssignId: string) => {
+  const vehicleAssign = await VehicleAssign.findById(vehicleAssignId)
     .populate(["driverId", "vehicleId"], {
       //   driverId: "name email phone profile",
       //   vehicleId: "name model year",
     })
     .lean();
 
-  const ratings = await Driverrating.find({ driverId: data?.driverId })
+  if (!vehicleAssign) {
+    return null;
+  }
+
+  const assignedDriverId =
+    (vehicleAssign.driverId as { _id?: unknown } | undefined)?._id ??
+    vehicleAssign.driverId;
+
+  const driverRatings = await Driverrating.find({
+    driverId: assignedDriverId,
+  })
     .select("rating")
     .lean();
-  const averageRating = ratings.length
-    ? ratings.reduce((s, r) => s + r.rating, 0) / ratings.length
+  const averageRating = driverRatings.length
+    ? driverRatings.reduce(
+        (ratingSum, driverRating) => ratingSum + driverRating.rating,
+        0,
+      ) / driverRatings.length
     : 0;
-  (data as any).averageRating = averageRating;
-  return data;
+
+  return {
+    ...vehicleAssign,
+    averageRating,
+  };
 };
 
 const updateVehicleAssignIntoDB = async (
   id: string,
   payload: IVehicleAssign,
 ) => {
-  const data = await VehicleAssign.findByIdAndUpdate(id, payload, {
-    new: true,
-  });
-  return data;
+  const currentAssignment = await VehicleAssign.findById(id).lean();
+  if (!currentAssignment) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Vehicle assignment not found");
+  }
+
+  const nextDriverId = payload.driverId ?? currentAssignment.driverId;
+  const nextVehicleId = payload.vehicleId ?? currentAssignment.vehicleId;
+
+  const anotherAssignment = await VehicleAssign.findOne({
+    driverId: nextDriverId,
+    vehicleId: nextVehicleId,
+    _id: { $ne: id },
+  }).lean();
+
+  if (anotherAssignment) {
+    throw new ApiError(
+      StatusCodes.CONFLICT,
+      "This driver is already assigned to this vehicle",
+    );
+  }
+
+  try {
+    const vehicleAssign = await VehicleAssign.findByIdAndUpdate(id, payload, {
+      new: true,
+    });
+
+    if (!vehicleAssign) {
+      throw new ApiError(StatusCodes.NOT_FOUND, "Vehicle assignment not found");
+    }
+
+    return vehicleAssign;
+  } catch (error: any) {
+    if (error?.code === 11000) {
+      throw new ApiError(
+        StatusCodes.CONFLICT,
+        "This driver is already assigned to this vehicle",
+      );
+    }
+    throw error;
+  }
 };
 
 const deleteVehicleAssignFromDB = async (id: string) => {
