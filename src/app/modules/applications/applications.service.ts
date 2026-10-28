@@ -3,6 +3,7 @@ import ApiError from "../../../errors/ApiErrors";
 import { User } from "../user/user.model";
 import QueryBuilder from "../../builder/queryBuilder";
 import { USER_ROLES } from "../../../enums/user";
+import { VehicleAssign } from "../vehicleassign/vehicleassign.model";
 
 const updateDriverApplicationsStatusToDB = async (
   id: string,
@@ -24,8 +25,6 @@ const updateDriverApplicationsStatusToDB = async (
   }
   // TODO: need to send the email to the driver
 
-
-  
   return driver;
 };
 
@@ -41,10 +40,30 @@ const getAllDriverFromDB = async (query: Record<string, any>) => {
     .paginate()
     .sort();
   const [data, meta] = await Promise.all([
-    qb.modelQuery.exec(),
+    qb.modelQuery.lean().exec(),
     qb.getPaginationInfo(),
   ]);
-  return { data, meta };
+
+  if (!data.length) {
+    return { data, meta };
+  }
+
+  const assignments = await VehicleAssign.find({
+    driverId: { $in: data.map((driver) => driver._id) },
+  })
+    .populate("vehicleId")
+    .lean();
+
+  const assignmentByDriver = new Map(
+    assignments.map((assignment) => [String(assignment.driverId), assignment]),
+  );
+
+  const enriched = data.map((driver) => ({
+    ...driver,
+    vehicleAssign: assignmentByDriver.get(String(driver._id)) ?? null,
+  }));
+
+  return { data: enriched, meta };
 };
 
 export const ApplicationsServices = {
