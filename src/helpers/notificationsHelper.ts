@@ -6,20 +6,35 @@ import {
   pushNotificationQueue,
   SEND_PUSH_NOTIFICATION_JOB,
 } from "../queue/pushNotification.queue";
+import { logger } from "../shared/logger";
+
+// export const sendNotifications = async (data: any): Promise<INotification> => {
+//   const result = await Notification.create(data);
+
+//   //@ts-ignore
+//   const socketIo = global.io;
+
+//   if (socketIo) {
+//     socketIo.emit(`get-notification::${data?.receiver}`, result);
+//   }
+
+//   return result;
+// };
 
 export const sendNotifications = async (data: any): Promise<INotification> => {
   const result = await Notification.create(data);
 
-  //@ts-ignore
-  const socketIo = global.io;
-
-  if (socketIo) {
-    socketIo.emit(`get-notification::${data?.receiver}`, result);
+  try {
+    const socketIo = (global as typeof globalThis & { io?: any }).io;
+    if (socketIo && data?.receiver) {
+      socketIo.emit(`get-notification::${data.receiver}`, result);
+    }
+  } catch (error) {
+    logger.error(`Socket notification failed: ${error}`);
   }
 
   return result;
 };
-
 type NotifyAdminsInput = {
   sender: string;
   text: string;

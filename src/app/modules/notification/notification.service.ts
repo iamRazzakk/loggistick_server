@@ -2,6 +2,7 @@ import { JwtPayload } from "jsonwebtoken";
 import { INotification } from "./notification.interface";
 import { Notification } from "./notification.model";
 import QueryBuilder from "../../builder/queryBuilder";
+import { Types } from "mongoose";
 
 const createNotificationIntoDB = async (
   data: INotification,
@@ -18,9 +19,6 @@ const getNotificationsFromDB = async (
 ) => {
   const qb = new QueryBuilder(Notification.find({ receiver: user.id }), query)
     .paginate()
-    // firstName: string;
-    // middleName?: string;
-    // lastName: string;
     .populate(["sender"], {
       sender: `{firstName: 1, middleName: 1, lastName: 1}`,
     })
@@ -34,11 +32,30 @@ const getNotificationsFromDB = async (
 };
 // read notification
 const readNotificationIntoDB = async (user: JwtPayload, id: string) => {
-  const result = await Notification.findByIdAndUpdate(
-    id,
-    { read: true },
+  const result = await Notification.findOneAndUpdate(
+    { _id: id, receiver: user.id },
+    { $set: { read: true } },
     { new: true },
   );
+  return result;
+};
+
+// read all notifications
+const readAllNotificationsIntoDB = async (user: JwtPayload) => {
+  const result = await Notification.updateMany(
+    { receiver: new Types.ObjectId(user.id), read: false },
+    { $set: { read: true } },
+  );
+  return result;
+};
+
+// total unread notifications
+
+const countUnreadNotificationsFromDB = async (user: JwtPayload) => {
+  const result = await Notification.countDocuments({
+    receiver: user.id,
+    read: false,
+  }).lean();
   return result;
 };
 
@@ -46,4 +63,6 @@ export const NotificationService = {
   createNotificationIntoDB,
   getNotificationsFromDB,
   readNotificationIntoDB,
+  readAllNotificationsIntoDB,
+  countUnreadNotificationsFromDB,
 };

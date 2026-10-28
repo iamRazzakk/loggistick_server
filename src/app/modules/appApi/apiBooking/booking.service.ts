@@ -61,9 +61,7 @@ const getMyBookingsOnGoingDataFromDB = async (
     (booking as { isCancelledByYou?: boolean }).isCancelledByYou =
       cancelledBy != null && cancelledBy.equals(user.id!);
   }
-  return bookings.map((booking) =>
-    presentBookingForViewer(booking, user.role),
-  );
+  return bookings.map((booking) => presentBookingForViewer(booking, user.role));
 };
 
 const getMyBookingDetailsDataFromDB = async (user: JwtPayload, id: string) => {
@@ -139,7 +137,10 @@ const getDriverOverviewDataFromDB = async (user: JwtPayload) => {
     totalEarningsAmount?.reduce(
       (sum, row) =>
         sum +
-        (row?.organizationContribution ?? row?.passengerCoPay ?? row?.price ?? 0),
+        (row?.organizationContribution ??
+          row?.passengerCoPay ??
+          row?.price ??
+          0),
       0,
     ) ?? 0;
   return { totalTrips, totalCompletedTrips, totalEarnings };
@@ -196,14 +197,10 @@ const getUserOnGoingBookingTodayFromDB = async (user: JwtPayload) => {
 // driver on current booking (Trip maybe today lot's of but we need to show most recent one)
 
 const getDriverCurrentBookingFromDB = async (user: JwtPayload) => {
-  const now = new Date();
-  const today = format(now, "yyyy-MM-dd");
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
   const todaysBookings = await Booking.find({
     driverId: new Types.ObjectId(user.id),
-    serviceDate: today,
-    bookingStatus: { $ne: "cancelled" },
+    serviceDate: format(new Date(), "yyyy-MM-dd"),
+    bookingStatus: { $nin: ["cancelled", "completed"] },
   })
     .populate({
       path: "userId",
@@ -218,15 +215,19 @@ const getDriverCurrentBookingFromDB = async (user: JwtPayload) => {
     })
     .sort((a, b) => a.pickupMinutes - b.pickupMinutes);
 
-  const activeOverdueBooking = bookingsByPickup.find(
-    (item) =>
-      item.pickupMinutes <= currentMinutes &&
-      item.booking.bookingStatus !== "completed",
-  );
-
-  const upcomingBooking = bookingsByPickup.find(
-    (item) => item.pickupMinutes > currentMinutes,
-  );
+  const [activeOverdueBooking, upcomingBooking] = await Promise.all([
+    bookingsByPickup.find(
+      (item) =>
+        item.pickupMinutes <=
+          new Date().getHours() * 60 + new Date().getMinutes() &&
+        item.booking.bookingStatus !== "completed",
+    ),
+    bookingsByPickup.find(
+      (item) =>
+        item.pickupMinutes >
+        new Date().getHours() * 60 + new Date().getMinutes(),
+    ),
+  ]);
 
   const currentBooking =
     activeOverdueBooking?.booking ?? upcomingBooking?.booking;
@@ -257,10 +258,9 @@ const getDriverNextTripFromDB = async (user: JwtPayload) => {
       ? String((current as { _id: unknown })._id)
       : null;
 
-  const today = format(new Date(), "yyyy-MM-dd");
   const bookings = await Booking.find({
     driverId: new Types.ObjectId(user.id),
-    serviceDate: { $gte: today },
+    serviceDate: { $gte: format(new Date(), "yyyy-MM-dd") },
     bookingStatus: { $nin: ["cancelled", "completed"] },
     ...(currentId ? { _id: { $ne: currentId } } : {}),
   })

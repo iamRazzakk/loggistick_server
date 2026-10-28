@@ -52,8 +52,33 @@ const readNotification = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const readAllNotifications = catchAsync(async (req: Request, res: Response) => {
+  const result = await NotificationService.readAllNotificationsIntoDB(req.user);
+  sendResponse(res, {
+    statusCode: StatusCodes.OK,
+    success: true,
+    message: "All Notifications Read Successfully",
+    data: result,
+  });
+});
+
+const countUnreadNotifications = catchAsync(
+  async (req: Request, res: Response) => {
+    const user = req.user;
+    const result =
+      await NotificationService.countUnreadNotificationsFromDB(user);
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: "Unread Notifications Count Retrieved Successfully",
+      data: result,
+    });
+  },
+);
 export const NotificationController = {
   createNotification,
   getNotificationFromDB,
   readNotification,
+  readAllNotifications,
+  countUnreadNotifications,
 };

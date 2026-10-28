@@ -6,12 +6,18 @@ import config from "../config";
 import stripe from "../config/stripe";
 import { Booking } from "../app/modules/booking/booking.model";
 import { Payment } from "../app/modules/payment/payment.model";
-import { sendPushNotification } from "./notificationsHelper";
+import { sendNotifications, sendPushNotification } from "./notificationsHelper";
+import { User } from "../app/modules/user/user.model";
+import { USER_ROLES } from "../enums/user";
 
 const handleStripeWebhook = async (req: Request, res: Response) => {
   // Extract Stripe signature and webhook secret
   const signature = req.headers["stripe-signature"] as string;
   const webhookSecret = config.stripe.webhookSecret as string;
+
+  const admin = await User.find({ role: USER_ROLES.SUPER_ADMIN })
+    .select("_id")
+    .lean();
 
   let event: Stripe.Event | undefined;
 
@@ -35,47 +41,16 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
 
   try {
     switch (eventType) {
-      // checkout session success
-      // case "checkout.session.completed": {
-      //   const session = event.data.object as Stripe.Checkout.Session;
-      //   const bookingId = session.metadata?.bookingId;
-
-      //   if (session.payment_status === "paid" && bookingId) {
-      //     try {
-      //       const booking = await Booking.findByIdAndUpdate(bookingId, {
-      //         bookingStatus: "completed",
-      //         paymentStatus: "paid",
-      //       });
-      //       if (booking) {
-      //         await Payment.create({
-      //           bookingId: booking._id,
-      //           price: booking.price,
-      //           paymentStatus: "paid",
-      //           userId: booking.userId,
-      //           txnNumber: session?.payment_intent as string,
-      //         });
-      //       }
-      //     } catch (error) {
-      //       logger.error(colors.bgRed.bold(`Error updating booking: ${error}`));
-      //     }
-      //   }
-      //   break;
-      // }
-
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
         const bookingId = session.metadata?.bookingId;
         /**
-         * PREVIOUS IMPLEMENTATION
-         * Set bookingStatus to "completed" and inserted a Payment row
-         * with no duplicate guard. Payment finished the trip.
-         *
-         * NEW IMPLEMENTATION
          * Only a paid Checkout marks paymentStatus "paid".
          * Trip status stays onboard until the driver starts the route.
          * findOneAndUpdate is the lock, so a repeated webhook does not
          * insert a second payment or send a second notification.
          */
+
         if (session.payment_status !== "paid" || !bookingId) break;
         const booking = await Booking.findOneAndUpdate(
           { _id: bookingId, paymentStatus: { $ne: "paid" } },
@@ -107,12 +82,33 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
           .map((value) => value?.toString())
           .filter((value): value is string => Boolean(value));
 
-        await sendPushNotification({
-          userIds: recipients,
-          title: "Co-pay received",
-          body: "Passenger co-pay is paid. The route can start.",
-          data: { screen: "booking", referenceId: String(booking._id) },
-        });
+        // text: string;
+        // description?: string;
+        // receiver?: Types.ObjectId;
+        // sender?: Types.ObjectId;
+        // read: boolean;
+        // referenceId?: string;
+        // screen?: "booking" | "chat" | "push_notification";
+        // type?: "user" | "admin";
+
+        await Promise.all([
+          sendPushNotification({
+            userIds: recipients,
+            title: "Co-pay received",
+            body: "Passenger co-pay is paid. The route can start.",
+            data: { screen: "booking", referenceId: String(booking._id) },
+          }),
+          sendNotifications({
+            text: "Trip completed",
+            description: "The trip has been completed.",
+            sender: admin?.[0]?._id,
+            receiver: booking.userId,
+            referenceId: String(booking._id),
+            screen: "booking",
+            type: "admin",
+          }),
+        ]);
+
         break;
       }
       // checkout session failed

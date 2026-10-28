@@ -27,6 +27,30 @@ router
     checkDispatcherRoute("/notifications"),
     NotificationController.getNotificationFromDB,
   );
+router
+  .route("/count-unread")
+  .get(
+    auth(
+      USER_ROLES.USER,
+      USER_ROLES.SUPER_ADMIN,
+      USER_ROLES.DRIVER,
+      USER_ROLES.DISPATCHER,
+    ),
+    checkDispatcherRoute("/notifications"),
+    NotificationController.countUnreadNotifications,
+  );
+router
+  .route("/read-all")
+  .patch(
+    auth(
+      USER_ROLES.USER,
+      USER_ROLES.SUPER_ADMIN,
+      USER_ROLES.DRIVER,
+      USER_ROLES.DISPATCHER,
+    ),
+    checkDispatcherRoute("/notifications"),
+    NotificationController.readAllNotifications,
+  );
 
 router
   .route("/:id")
@@ -40,4 +64,5 @@ router
     checkDispatcherRoute("/notifications"),
     NotificationController.readNotification,
   );
+
 export const NotificationRoutes = router;
