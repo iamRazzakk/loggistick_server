@@ -1,7 +1,25 @@
-import { User } from "../user/user.model";
 import { Types } from "mongoose";
+import { StatusCodes } from "http-status-codes";
+import ApiError from "../../../errors/ApiErrors";
+import { User } from "../user/user.model";
+import { County } from "../serviceAndTariff/counties/counties.model";
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
 const escapeRegex = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const queryDay = (value: unknown, field: string) => {
+  const day = String(value ?? "").trim();
+  if (!day) return undefined;
+  if (!DAY.test(day)) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      `${field} must be yyyy-MM-dd`,
+    );
+  }
+  return day;
+};
 
 export const buildPendingBookingFilter = async (searchTerm?: string) => {
   const filter: Record<string, unknown> = { isApproved: "pending" };
@@ -50,13 +68,35 @@ export const buildTripHistoryFilter = async (query: Record<string, any>) => {
   if (driverId && Types.ObjectId.isValid(driverId)) {
     filter.driverId = new Types.ObjectId(driverId);
   }
+
   const payerId = String(query.payerSource ?? query.payerId ?? "").trim();
   if (payerId && Types.ObjectId.isValid(payerId)) {
-    filter.payerSource = new Types.ObjectId(payerId);
+    const counties = await County.find({
+      payersId: new Types.ObjectId(payerId),
+    })
+      .select("_id")
+      .lean();
+    filter.countyId = { $in: counties.map((county) => county._id) };
   }
-  const serviceDate = String(query.serviceDate ?? "").trim();
-  if (serviceDate) {
-    filter.serviceDate = serviceDate;
+
+  const startDate = queryDay(query.startDate, "startDate");
+  const endDate = queryDay(query.endDate, "endDate");
+  if (startDate && endDate && startDate > endDate) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "startDate must be on or before endDate",
+    );
+  }
+  if (startDate || endDate) {
+    filter.serviceDate = {
+      ...(startDate ? { $gte: startDate } : {}),
+      ...(endDate ? { $lte: endDate } : {}),
+    };
+  } else {
+    const serviceDate = String(query.serviceDate ?? "").trim();
+    if (serviceDate) {
+      filter.serviceDate = serviceDate;
+    }
   }
   const term = String(query.searchTerm ?? "").trim();
   if (!term) return filter;

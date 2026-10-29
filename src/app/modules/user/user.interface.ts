@@ -41,6 +41,10 @@ export type IUser = {
   fcmToken?: string | null;
   // need to add new field for push notification will send or not for this user
   isPushNotificationEnabled?: boolean;
+  /** Stripe Customer reused for saved cards after the first co-pay. */
+  stripeCustomerId?: string;
+  /** Default card on the Stripe Customer, charged on later trips. */
+  stripeDefaultPaymentMethodId?: string;
 };
 
 export type UserModal = {

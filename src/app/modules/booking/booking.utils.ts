@@ -11,6 +11,12 @@ import stripe from "../../../config/stripe";
 import config from "../../../config";
 import { IBooking } from "./booking.interface";
 import {
+  chargeSavedCard,
+  createCopayCheckoutSession,
+  expireCheckoutSession,
+  getOrCreateStripeCustomer,
+} from "../../../helpers/stripeCopay";
+import {
   ChargeOutcome,
   MileageSource,
   PricedLeg,
@@ -509,8 +515,10 @@ const coPayAmount = (booking: { passengerCoPay?: number; price?: number }) =>
   booking.passengerCoPay ?? booking.price ?? 0;
 
 /**
- * Charge only the passenger co-pay. Reuse an open Checkout session.
- * Do not change trip status and do not mark the payment paid here.
+ * Charge only the passenger co-pay.
+ * First trip: Stripe Checkout saves the card on the rider's Stripe Customer.
+ * Later trips: charge that card in place. Fall back to Checkout if Stripe needs
+ * authentication or the saved card cannot be used.
  */
 export const handlePayment = async (id: string) => {
   const existing = await Booking.findById(id).select(
@@ -537,12 +545,38 @@ export const handlePayment = async (id: string) => {
     return { booking: existing.toObject(), checkoutUrl: null as string | null };
   }
 
+  const rider = await User.findById(existing.userId)
+    .select(
+      "email firstName middleName lastName stripeCustomerId stripeDefaultPaymentMethodId",
+    )
+    .lean();
+  if (!rider?.email)
+    throw new ApiError(StatusCodes.NOT_FOUND, "Rider email not found");
+
+  const customerId = await getOrCreateStripeCustomer(rider);
+  const userId = String(existing.userId);
+
+  if (rider.stripeDefaultPaymentMethodId) {
+    await expireCheckoutSession(existing.stripeCheckoutSessionId);
+    existing.stripeCheckoutSessionId = undefined;
+    const paid = await chargeSavedCard({
+      bookingId: id,
+      amount,
+      customerId,
+      paymentMethodId: rider.stripeDefaultPaymentMethodId,
+      userId,
+    });
+    if (paid) {
+      return { booking: paid.toObject(), checkoutUrl: null as string | null };
+    }
+  }
+
   if (existing.stripeCheckoutSessionId) {
     try {
       const open = await stripe.checkout.sessions.retrieve(
         existing.stripeCheckoutSessionId,
       );
-      if (open.status === "open" && open.url) {
+      if (open.status === "open" && open.url && open.customer) {
         return { booking: existing.toObject(), checkoutUrl: open.url };
       }
     } catch {
@@ -550,27 +584,11 @@ export const handlePayment = async (id: string) => {
     }
   }
 
-  const rider = await User.findById(existing.userId).lean().select("email");
-  if (!rider?.email)
-    throw new ApiError(StatusCodes.NOT_FOUND, "Rider email not found");
-
-  const session = await stripe.checkout.sessions.create({
-    mode: "payment",
-    customer_email: rider.email,
-    client_reference_id: id,
-    line_items: [
-      {
-        quantity: 1,
-        price_data: {
-          currency: "usd",
-          unit_amount: Math.round(amount * 100),
-          product_data: { name: `Trip co-pay ${id}` },
-        },
-      },
-    ],
-    metadata: { bookingId: id, charge: "passenger-copay" },
-    success_url: `${config.stripe.paymentSuccess}?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${config.stripe.paymentCancel}`,
+  const session = await createCopayCheckoutSession({
+    bookingId: id,
+    amount,
+    customerId,
+    userId,
   });
 
   existing.stripeCheckoutSessionId = session.id;

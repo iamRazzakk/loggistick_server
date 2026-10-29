@@ -304,6 +304,8 @@ const getTripHistoryFromDB = async (
   const {
     searchTerm: _searchTerm,
     serviceDate: _serviceDate,
+    startDate: _startDate,
+    endDate: _endDate,
     driverId: _driverId,
     payerSource: _payerSource,
     payerId: _payerId,
@@ -333,6 +335,14 @@ const getTripHistoryFromDB = async (
     .fields()
     .paginate();
 
+  qb.modelQuery.populate([
+    {
+      path: "countyId",
+      select: "payersId",
+      populate: { path: "payersId", select: "name type" },
+    },
+  ]);
+
   const [data, meta] = await Promise.all([
     qb.modelQuery.lean().exec(),
     qb.getPaginationInfo(),
@@ -359,6 +369,11 @@ export const buildTripHistoryFile = async (
       { path: "driverId", select: "firstName lastName" },
       { path: "mobilityRequirements", select: "name" },
       { path: "payerSource", select: "name type" },
+      {
+        path: "countyId",
+        select: "payersId",
+        populate: { path: "payersId", select: "name type" },
+      },
     ])
     .lean();
 
@@ -420,6 +435,7 @@ const updateBookingInDB = async (
     const payment = await handlePayment(id);
     return {
       checkoutUrl: payment.checkoutUrl,
+      paymentStatus: payment.booking.paymentStatus,
     };
   }
 

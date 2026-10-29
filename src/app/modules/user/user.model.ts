@@ -152,6 +152,14 @@ const userSchema = new Schema<IUser, UserModal>(
       required: false,
       default: true,
     },
+    stripeCustomerId: {
+      type: String,
+      required: false,
+    },
+    stripeDefaultPaymentMethodId: {
+      type: String,
+      required: false,
+    },
   },
   {
     timestamps: true,
@@ -164,6 +172,7 @@ const userSchema = new Schema<IUser, UserModal>(
 // userSchema.index({ email: 1 });
 // if filtering by role often
 userSchema.index({ role: 1 });
+userSchema.index({ stripeCustomerId: 1 }, { unique: true, sparse: true });
 //exist user check
 userSchema.statics.isExistUserById = async (id: string) => {
   const isExist = await User.findById(id);

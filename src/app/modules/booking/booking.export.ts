@@ -1,9 +1,11 @@
+import { format } from "date-fns";
 import { USER_ROLES } from "../../../enums/user";
 import { ExportCell, ExportColumn } from "../../../shared/tabularExport";
 import { displayName, joinList } from "../../../util/formatText";
 
 type NamedPerson = { firstName?: string; lastName?: string } | null;
 type NamedRecord = { name?: string; type?: string } | null;
+type CountyPayer = { payersId?: NamedRecord | null } | null;
 
 export type TripHistoryBooking = {
   _id: unknown;
@@ -21,6 +23,8 @@ export type TripHistoryBooking = {
   appointmentTime?: string;
   pickupTime?: string;
   returnTime?: string;
+  driverArrivedAt?: string;
+  driverPicupAt?: string;
   recurringBooking?: boolean;
   selectedDate?: string | string[];
   endDate?: string;
@@ -28,7 +32,7 @@ export type TripHistoryBooking = {
   tripNote?: string;
   internalPrivateNote?: string;
   programContext?: string;
-  countyId?: unknown;
+  countyId?: CountyPayer | unknown;
   totalPrice?: number;
   calculatedRouteMileage?: number | null;
   actualGpsMileage?: number | null;
@@ -54,19 +58,25 @@ type TripColumn = ExportColumn & {
 
 const text = (value?: string | number | null) => value ?? "";
 
-const when = (value?: Date | string) =>
-  value ? new Date(value).toISOString() : "";
-
-const idOf = (value: unknown) => {
-  if (!value) return "";
-  if (typeof value === "object" && value !== null && "_id" in value) {
-    return String((value as { _id: unknown })._id);
-  }
-  return String(value);
-};
+const localIso = (value?: Date | string) =>
+  value ? format(new Date(value), "yyyy-MM-dd'T'HH:mm:ssXXX") : "";
 
 const dayList = (value?: string | string[]) =>
   joinList(Array.isArray(value) ? value : value ? [value] : []);
+
+const fundingSource = (booking: TripHistoryBooking): NamedRecord => {
+  if (booking.payerSource?.name || booking.payerSource?.type) {
+    return booking.payerSource;
+  }
+  const county =
+    booking.countyId &&
+    typeof booking.countyId === "object" &&
+    booking.countyId !== null
+      ? (booking.countyId as CountyPayer)
+      : null;
+  const payer = county && typeof county === "object" ? county.payersId : null;
+  return payer && typeof payer === "object" ? payer : null;
+};
 
 const COLUMNS: TripColumn[] = [
   {
@@ -97,13 +107,13 @@ const COLUMNS: TripColumn[] = [
     header: "Funding Source",
     key: "payerSource",
     width: 20,
-    pick: (booking) => booking.payerSource?.name ?? "",
+    pick: (booking) => fundingSource(booking)?.name ?? "",
   },
   {
     header: "Funding Source Type",
     key: "payerType",
     width: 18,
-    pick: (booking) => booking.payerSource?.type ?? "",
+    pick: (booking) => fundingSource(booking)?.type ?? "",
   },
   {
     header: "Pickup",
@@ -185,6 +195,18 @@ const COLUMNS: TripColumn[] = [
     pick: (booking) => text(booking.returnTime),
   },
   {
+    header: "Driver Arrived At",
+    key: "driverArrivedAt",
+    width: 22,
+    pick: (booking) => text(booking.driverArrivedAt),
+  },
+  {
+    header: "Driver Pickup At",
+    key: "driverPicupAt",
+    width: 22,
+    pick: (booking) => text(booking.driverPicupAt),
+  },
+  {
     header: "Recurring",
     key: "recurringBooking",
     width: 12,
@@ -253,12 +275,6 @@ const COLUMNS: TripColumn[] = [
     pick: (booking) => text(booking.paymentStatus),
   },
   {
-    header: "County Id",
-    key: "countyId",
-    width: 28,
-    pick: (booking) => idOf(booking.countyId),
-  },
-  {
     header: "Straight Line Mileage",
     key: "straightLineMileage",
     width: 18,
@@ -304,13 +320,7 @@ const COLUMNS: TripColumn[] = [
     header: "Created At",
     key: "createdAt",
     width: 24,
-    pick: (booking) => when(booking.createdAt),
-  },
-  {
-    header: "Updated At",
-    key: "updatedAt",
-    width: 24,
-    pick: (booking) => when(booking.updatedAt),
+    pick: (booking) => localIso(booking.createdAt),
   },
 ];
 

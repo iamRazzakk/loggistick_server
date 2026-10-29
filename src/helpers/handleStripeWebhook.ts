@@ -5,19 +5,30 @@ import { logger } from "../shared/logger";
 import config from "../config";
 import stripe from "../config/stripe";
 import { Booking } from "../app/modules/booking/booking.model";
-import { Payment } from "../app/modules/payment/payment.model";
-import { sendNotifications, sendPushNotification } from "./notificationsHelper";
-import { User } from "../app/modules/user/user.model";
-import { USER_ROLES } from "../enums/user";
+import {
+  COPAY_CHARGE,
+  finalizePassengerCopay,
+  saveUserPaymentMethod,
+  stripeId,
+} from "./stripeCopay";
+
+const persistCardFromIntent = async (
+  userId: string | undefined,
+  customer: unknown,
+  paymentMethod: unknown,
+) => {
+  if (!userId) return;
+  await saveUserPaymentMethod(
+    userId,
+    stripeId(customer),
+    stripeId(paymentMethod),
+  );
+};
 
 const handleStripeWebhook = async (req: Request, res: Response) => {
   // Extract Stripe signature and webhook secret
   const signature = req.headers["stripe-signature"] as string;
   const webhookSecret = config.stripe.webhookSecret as string;
-
-  const admin = await User.find({ role: USER_ROLES.SUPER_ADMIN })
-    .select("_id")
-    .lean();
 
   let event: Stripe.Event | undefined;
 
@@ -52,63 +63,43 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
          */
 
         if (session.payment_status !== "paid" || !bookingId) break;
-        const booking = await Booking.findOneAndUpdate(
-          { _id: bookingId, paymentStatus: { $ne: "paid" } },
-          {
-            $set: {
-              bookingStatus: "completed",
-              paymentStatus: "paid",
-            },
-            $unset: { stripeCheckoutSessionId: 1 },
-          },
-          { new: true },
+
+        const paymentIntentId = stripeId(session.payment_intent);
+        let paymentMethodId: string | undefined;
+        if (paymentIntentId) {
+          const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
+          paymentMethodId = stripeId(intent.payment_method);
+        }
+
+        const booking = await finalizePassengerCopay({
+          bookingId,
+          txnNumber: String(session.payment_intent ?? session.id),
+        });
+
+        await persistCardFromIntent(
+          booking?.userId?.toString() ?? session.metadata?.userId,
+          session.customer,
+          paymentMethodId,
         );
-        if (!booking) break;
 
-        await Payment.updateOne(
-          { bookingId: booking._id },
-          {
-            $setOnInsert: {
-              bookingId: booking._id,
-              price: booking.passengerCoPay ?? booking.price,
-              paymentStatus: "paid",
-              userId: booking.userId,
-              txnNumber: String(session.payment_intent ?? session.id),
-            },
-          },
-          { upsert: true },
+        break;
+      }
+      case "payment_intent.succeeded": {
+        const intent = event.data.object as Stripe.PaymentIntent;
+        if (intent.metadata?.charge !== COPAY_CHARGE) break;
+        const bookingId = intent.metadata.bookingId;
+        if (!bookingId) break;
+
+        const booking = await finalizePassengerCopay({
+          bookingId,
+          txnNumber: intent.id,
+        });
+
+        await persistCardFromIntent(
+          booking?.userId?.toString() ?? intent.metadata.userId,
+          intent.customer,
+          intent.payment_method,
         );
-        const recipients = [booking.userId, booking.driverId]
-          .map((value) => value?.toString())
-          .filter((value): value is string => Boolean(value));
-
-        // text: string;
-        // description?: string;
-        // receiver?: Types.ObjectId;
-        // sender?: Types.ObjectId;
-        // read: boolean;
-        // referenceId?: string;
-        // screen?: "booking" | "chat" | "push_notification";
-        // type?: "user" | "admin";
-
-        await Promise.all([
-          sendPushNotification({
-            userIds: recipients,
-            title: "Co-pay received",
-            body: "Passenger co-pay is paid. The route can start.",
-            data: { screen: "booking", referenceId: String(booking._id) },
-          }),
-          sendNotifications({
-            text: "Trip completed",
-            description: "The trip has been completed.",
-            sender: admin?.[0]?._id,
-            receiver: booking.userId,
-            referenceId: String(booking._id),
-            screen: "booking",
-            type: "admin",
-          }),
-        ]);
-
         break;
       }
       // checkout session failed

@@ -49,32 +49,34 @@ router
     BookingController.getAllMyBookings,
   );
 
-// trip history API
+// Trip History page (Show Map + Export toolbar)
+// Shared optional query for list, map, and file:
+//   startDate, endDate = yyyy-MM-dd on booking.serviceDate
+//   payerId | payerSource = Payers._id via County.payersId → booking.countyId
+//   searchTerm, driverId, unassign, sort, page, limit
+const tripHistoryAuth = [
+  auth(
+    USER_ROLES.DISPATCHER,
+    USER_ROLES.DRIVER,
+    USER_ROLES.SUPER_ADMIN,
+    USER_ROLES.USER,
+  ),
+  checkDispatcherRoute("/trips"),
+] as const;
+
+// GET /api/v1/booking/history — table + map JSON
 router
   .route("/history")
-  .get(
-    auth(
-      USER_ROLES.DISPATCHER,
-      USER_ROLES.DRIVER,
-      USER_ROLES.SUPER_ADMIN,
-      USER_ROLES.USER,
-    ),
-    checkDispatcherRoute("/trips"),
-    BookingController.getTripHistory,
-  );
-// trip history file: ?type=excel | csv | pdf
+  .get(...tripHistoryAuth, BookingController.getTripHistory);
+
+// GET /api/v1/booking/history/export?type=excel|csv|pdf — file download
+// GET /api/v1/booking/history/excel — same handler (legacy path)
+router
+  .route("/history/export")
+  .get(...tripHistoryAuth, BookingController.getTripHistoryInExcel);
 router
   .route("/history/excel")
-  .get(
-    auth(
-      USER_ROLES.DISPATCHER,
-      USER_ROLES.DRIVER,
-      USER_ROLES.SUPER_ADMIN,
-      USER_ROLES.USER,
-    ),
-    checkDispatcherRoute("/trips"),
-    BookingController.getTripHistoryInExcel,
-  );
+  .get(...tripHistoryAuth, BookingController.getTripHistoryInExcel);
 // scheduled bookings
 router
   .route("/scheduled")
