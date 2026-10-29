@@ -65,6 +65,11 @@ const emptyDay = (date: string): IDutyDayCache => ({
   dirty: true,
 });
 
+const syncUserOnDuty = (driverId: string, isOnDuty: boolean) =>
+  User.updateOne({ _id: new Types.ObjectId(driverId) }, { isOnDuty }).catch(
+    () => undefined,
+  );
+
 const applyToggle = (state: IDutyStateCache, now = new Date()) => {
   const today = getDutyDate(now);
   const openDay = Object.values(state.days).find((day) =>
@@ -106,6 +111,7 @@ export const applyDutyToggleInCache = async (driverId: string) => {
     state.updatedAt = Date.now();
     await saveDutyState(state);
     await markDriverDirty(driverId);
+    await syncUserOnDuty(driverId, state.isOnDuty);
 
     return {
       action,
@@ -160,8 +166,6 @@ export const flushDutyToDB = async (driverId: string) => {
     ),
   );
 
-  await User.updateOne({ _id: id }, { isOnDuty: state.isOnDuty });
-
   let rescheduled = false;
   await withDutyLock(driverId, async () => {
     const latest = await peekDutyState(driverId);
@@ -172,6 +176,7 @@ export const flushDutyToDB = async (driverId: string) => {
 
     if (latest.version !== state.version) {
       rescheduled = true;
+      await syncUserOnDuty(driverId, latest.isOnDuty);
       return;
     }
 
@@ -187,6 +192,7 @@ export const flushDutyToDB = async (driverId: string) => {
       await markDriverClean(driverId);
     }
     await saveDutyState(latest);
+    await syncUserOnDuty(driverId, latest.isOnDuty);
   });
 
   if (rescheduled) {
