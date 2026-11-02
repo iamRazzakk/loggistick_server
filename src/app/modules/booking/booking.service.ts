@@ -51,6 +51,7 @@ import {
 import { runExportJob } from "../../../helpers/runExportJob";
 import { EXPORT_TRIP_HISTORY_JOB } from "../../../queue/export.queue";
 import { isDriverOnDuty } from "../driverduty/driverduty.cache";
+import { pickupAppointmentError } from "../appApi/apiBooking/booking.helper";
 
 const JOB_WAIT_MS = 120_000;
 
