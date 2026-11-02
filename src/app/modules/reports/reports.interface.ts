@@ -5,9 +5,10 @@ export type IReports = {
   reportStatus: "pending" | "approved" | "rejected";
   documents: string;
   reportedBy: Types.ObjectId;
-  tripId: Types.ObjectId;
+  tripId?: Types.ObjectId;
+  assignedUserId?: Types.ObjectId;
+  internalNote?: string;
   reason: string;
 };
-
 
 export type ReportsModel = Model<IReports>;

@@ -52,9 +52,22 @@ const getDutyLogs = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+
+const getAllActiveDrivers = catchAsync(async (req: Request, res: Response) => {
+  const result = await DriverDutyServices.getAllActiveDriversFromDB(req.query);
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Active drivers retrieved successfully",
+    pagination: result.meta,
+    data: result.data,
+  });
+});
+
 export const DriverDutyController = {
   toggleDuty,
   getCurrentDuty,
   getMyDutyHistory,
   getDutyLogs,
+  getAllActiveDrivers,
 };

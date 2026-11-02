@@ -38,4 +38,9 @@ router.get(
   checkDispatcherRoute("/riders"),
   DashboardController.getRiderAndUserTripHistory,
 );
+router.get(
+  "/pending-bookings",
+  auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+  DashboardController.getRecent5PendingBookings,
+);
 export const DashboardRoutes = router;

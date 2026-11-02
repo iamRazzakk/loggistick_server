@@ -13,17 +13,28 @@ router
   .post(auth(USER_ROLES.DRIVER), DriverDutyController.toggleDuty)
   .get(auth(USER_ROLES.DRIVER), DriverDutyController.getCurrentDuty);
 
-router.route("/history").get(
-  auth(USER_ROLES.DRIVER),
-  validateRequest(DriverDutyValidations.getDutyLogsZodSchema),
-  DriverDutyController.getMyDutyHistory,
-);
+router
+  .route("/active")
+  .get(
+    auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+    DriverDutyController.getAllActiveDrivers,
+  );
 
-router.route("/logs").get(
-  auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
-  checkDispatcherRoute("/drivers"),
-  validateRequest(DriverDutyValidations.getDutyLogsZodSchema),
-  DriverDutyController.getDutyLogs,
-);
+router
+  .route("/history")
+  .get(
+    auth(USER_ROLES.DRIVER),
+    validateRequest(DriverDutyValidations.getDutyLogsZodSchema),
+    DriverDutyController.getMyDutyHistory,
+  );
+
+router
+  .route("/logs")
+  .get(
+    auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+    checkDispatcherRoute("/drivers"),
+    validateRequest(DriverDutyValidations.getDutyLogsZodSchema),
+    DriverDutyController.getDutyLogs,
+  );
 
 export const DriverDutyRoutes = router;

@@ -324,14 +324,56 @@ const COLUMNS: TripColumn[] = [
   },
 ];
 
-const columnsFor = (role?: string) =>
-  COLUMNS.filter((column) => column.hiddenFrom !== role);
+export const columnsFor = (role?: string, requestedFields?: unknown) => {
+  const allowed = COLUMNS.filter((column) => column.hiddenFrom !== role);
+  if (!requestedFields) {
+    return allowed;
+  }
+
+  const rawFields: string[] = [];
+  if (Array.isArray(requestedFields)) {
+    for (const item of requestedFields) {
+      if (typeof item === "string") {
+        rawFields.push(...item.split(","));
+      }
+    }
+  } else if (typeof requestedFields === "string") {
+    rawFields.push(...requestedFields.split(","));
+  }
+
+  const cleaned = rawFields.map((f) => f.trim()).filter(Boolean);
+  if (cleaned.length === 0) {
+    return allowed;
+  }
+
+  const matched: TripColumn[] = [];
+  const addedKeys = new Set<string>();
+
+  for (const field of cleaned) {
+    const fieldLower = field.toLowerCase();
+    const found = allowed.find(
+      (col) =>
+        col.key.toLowerCase() === fieldLower ||
+        col.header.toLowerCase() === fieldLower,
+    );
+    if (found && !addedKeys.has(found.key)) {
+      matched.push(found);
+      addedKeys.add(found.key);
+    }
+  }
+
+  return matched.length > 0 ? matched : allowed;
+};
+
+export const getExportableTripColumns = (role?: string) =>
+  columnsFor(role).map(({ header, key }) => ({ header, key }));
 
 export const tripHistoryTable = (
   bookings: TripHistoryBooking[],
   role?: string,
+  requestedFields?: unknown,
 ) => {
-  const columns = columnsFor(role);
+  const columns = columnsFor(role, requestedFields);
   return {
     sheetName: "Trip History",
     filename: "trip-history",
@@ -343,3 +385,4 @@ export const tripHistoryTable = (
     ),
   };
 };
+

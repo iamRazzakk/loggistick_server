@@ -25,6 +25,9 @@ const reportZodSchema = z.object({
       required_error: "Documents is required",
     })
     .optional(),
+  reportStatus: z.enum(["pending", "approved", "rejected"]).optional(),
+  assignedUserId: z.string().optional(),
+  internalNote: z.string().optional(),
 });
 
 const createReportZodSchema = z.object({

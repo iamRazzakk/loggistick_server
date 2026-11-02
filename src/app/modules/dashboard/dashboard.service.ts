@@ -190,6 +190,15 @@ const getRiderAndUserTripHistoryFromDB = async (
     data,
   };
 };
+
+// get recent 5 pending bookings
+const getRecent5PendingBookingsFromDB = async () => {
+  const bookings = await Booking.find({ bookingStatus: "pending" })
+    .sort({ createdAt: -1 })
+    .limit(5);
+  return bookings;
+};
+
 export const DashboardServices = {
   dashboardOverviewFromDB,
   activeTripsFromDB,
@@ -197,4 +206,5 @@ export const DashboardServices = {
   getAdminDashboardOverviewFromDB,
   getAdminTripDistributionFromDB,
   getRiderAndUserTripHistoryFromDB,
+  getRecent5PendingBookingsFromDB
 };

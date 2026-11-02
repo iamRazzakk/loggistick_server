@@ -13,10 +13,7 @@ import {
 import { DRIVER_POPULATE_FIELDS } from "./driverduty.constants";
 import { IDriverDuty, IDutyStateCache } from "./driverduty.interface";
 import { DriverDuty } from "./driverduty.model";
-import {
-  applyDutyToggleInCache,
-  flushDutyToDB,
-} from "./driverduty.processor";
+import { applyDutyToggleInCache, flushDutyToDB } from "./driverduty.processor";
 import { normalizeDutyDate, presentDriverDuty } from "./driverduty.utils";
 
 const syncDirtyDutyToDB = async (driverIds?: string[]) => {
@@ -230,9 +227,7 @@ const getDutyLogsFromDB = async (query: Record<string, unknown>) => {
   ]);
 
   const pageDriverIds = data.map((duty) => driverRefId(duty.driverId));
-  const extraIds = parsedDriverId
-    ? [parsedDriverId]
-    : await listDirtyDrivers();
+  const extraIds = parsedDriverId ? [parsedDriverId] : await listDirtyDrivers();
   const states = await loadStates([...pageDriverIds, ...extraIds]);
   const logs = overlayCachedDays(data, states, filter);
   const populated = await attachDriverProfiles(logs);
@@ -243,9 +238,27 @@ const getDutyLogsFromDB = async (query: Record<string, unknown>) => {
   };
 };
 
+const getAllActiveDriversFromDB = async (query: Record<string, unknown>) => {
+  const qb = new QueryBuilder(DriverDuty.find({ isOnDuty: true }), query)
+    .filter()
+    .sort()
+    .paginate()
+    .populate(["driverId"], { driverId: DRIVER_POPULATE_FIELDS });
+
+  const [data, meta] = await Promise.all([
+    qb.modelQuery.lean<IDriverDuty[]>().exec(),
+    qb.getPaginationInfo(),
+  ]);
+  return {
+    data,
+    meta,
+  };
+};
+
 export const DriverDutyServices = {
   toggleDutyIntoDB,
   getCurrentDutyFromDB,
   getMyDutyHistoryFromDB,
   getDutyLogsFromDB,
+  getAllActiveDriversFromDB,
 };

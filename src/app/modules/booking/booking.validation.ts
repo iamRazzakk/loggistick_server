@@ -75,13 +75,6 @@ const bookingBodyRefine = (
   data: z.infer<typeof bookingBodySchema>,
   ctx: z.RefinementCtx,
 ) => {
-  if (data.tripType === "round-trip" && !data.returnTime) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["returnTime"],
-      message: "Return time is required when trip type is round-trip",
-    });
-  }
   const timeError = pickupAppointmentError(
     data.pickupTime,
     data.appointmentTime,

@@ -31,6 +31,15 @@ const reportsSchema = new Schema<IReports, ReportsModel>(
       type: String,
       required: true,
     },
+    assignedUserId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: false,
+    },
+    internalNote: {
+      type: String,
+      required: false,
+    },
   },
   { timestamps: true },
 );

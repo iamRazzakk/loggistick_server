@@ -12,6 +12,7 @@ import "./worker/notification.worker"; // Broadcast notification worker
 import "./worker/pushNotification.worker"; // Push notification worker
 import "./worker/export.worker"; // File export worker
 import "./worker/driverduty.worker"; // Driver duty worker
+import "./worker/report.worker"; // Report assigned worker
 // redis client
 import "./config/redis.config";
 import { RedisClient } from "./config/redis.config";

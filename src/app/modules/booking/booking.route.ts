@@ -69,14 +69,22 @@ router
   .route("/history")
   .get(...tripHistoryAuth, BookingController.getTripHistory);
 
+// GET /api/v1/booking/history/export-fields — exportable fields list for current role
+router
+  .route("/history/export-fields")
+  .get(...tripHistoryAuth, BookingController.getTripHistoryExportFields);
+
 // GET /api/v1/booking/history/export?type=excel|csv|pdf — file download
+// POST /api/v1/booking/history/export — file download with JSON body
 // GET /api/v1/booking/history/excel — same handler (legacy path)
 router
   .route("/history/export")
-  .get(...tripHistoryAuth, BookingController.getTripHistoryInExcel);
+  .get(...tripHistoryAuth, BookingController.getTripHistoryInExcel)
+  .post(...tripHistoryAuth, BookingController.getTripHistoryInExcel);
 router
   .route("/history/excel")
-  .get(...tripHistoryAuth, BookingController.getTripHistoryInExcel);
+  .get(...tripHistoryAuth, BookingController.getTripHistoryInExcel)
+  .post(...tripHistoryAuth, BookingController.getTripHistoryInExcel);
 // scheduled bookings
 router
   .route("/scheduled")

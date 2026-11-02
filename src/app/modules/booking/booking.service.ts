@@ -39,8 +39,11 @@ import {
   buildTripHistoryFilter,
 } from "./booking.query";
 import { LOCKED_FARE_FIELDS } from "./booking.constant";
-import { pickupAppointmentError } from "../appApi/apiBooking/booking.helper";
-import { TripHistoryBooking, tripHistoryTable } from "./booking.export";
+import {
+  getExportableTripColumns,
+  TripHistoryBooking,
+  tripHistoryTable,
+} from "./booking.export";
 import {
   exportTypeFromQuery,
   writeTabularExport,
@@ -306,6 +309,18 @@ const getTripHistoryFromDB = async (
     serviceDate: _serviceDate,
     startDate: _startDate,
     endDate: _endDate,
+    selectedDate: _selectedDate,
+    selectedDates: _selectedDates,
+    date: _date,
+    from: _from,
+    to: _to,
+    ids: _ids,
+    bookingIds: _bookingIds,
+    tripIds: _tripIds,
+    selectedIds: _selectedIds,
+    fields: _fields,
+    selectedFields: _selectedFields,
+    columns: _columns,
     driverId: _driverId,
     payerSource: _payerSource,
     payerId: _payerId,
@@ -377,11 +392,17 @@ export const buildTripHistoryFile = async (
     ])
     .lean();
 
+  const selectedFields =
+    query.fields ?? query.selectedFields ?? query.columns;
+
   return writeTabularExport({
     format: exportTypeFromQuery(query),
-    ...tripHistoryTable(bookings as TripHistoryBooking[], role),
+    ...tripHistoryTable(bookings as TripHistoryBooking[], role, selectedFields),
   });
 };
+
+const getTripHistoryExportFields = (user: JwtPayload) =>
+  getExportableTripColumns(user.role);
 
 const getTripHistoryInExcelFromDB = (
   user: JwtPayload,
@@ -658,4 +679,5 @@ export const BookingServices = {
   getSingleRiderBookingHistoryFromDB,
   calculateTotalTripPrice,
   getTripHistoryInExcelFromDB,
+  getTripHistoryExportFields,
 };

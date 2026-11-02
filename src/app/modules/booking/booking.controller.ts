@@ -76,11 +76,27 @@ const getTripHistory = catchAsync(async (req: Request, res: Response) => {
 
 const getTripHistoryInExcel = catchAsync(
   async (req: Request, res: Response) => {
+    const payload = {
+      ...req.query,
+      ...(req.body && typeof req.body === "object" ? req.body : {}),
+    };
     const file = await BookingServices.getTripHistoryInExcelFromDB(
       req.user,
-      req.query,
+      payload,
     );
     sendDownload(res, file);
+  },
+);
+
+const getTripHistoryExportFields = catchAsync(
+  async (req: Request, res: Response) => {
+    const fields = BookingServices.getTripHistoryExportFields(req.user);
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: "Trip history export fields retrieved successfully",
+      data: fields,
+    });
   },
 );
 
@@ -188,4 +204,5 @@ export const BookingController = {
   getScheduledBookings,
   getSingleRiderBookingHistory,
   calculateTotalTripPrice,
+  getTripHistoryExportFields,
 };

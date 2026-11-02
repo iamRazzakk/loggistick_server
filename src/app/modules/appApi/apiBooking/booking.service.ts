@@ -155,7 +155,9 @@ const getUserOnGoingBookingTodayFromDB = async (user: JwtPayload) => {
     bookingStatus: {
       $nin: ["cancelled", "completed", "pending"],
     },
+    driverId: { $ne: null },
   })
+    .sort({ createdAt: -1 })
     .populate({
       path: "driverId",
       select: "firstName lastName middleName profile contact",
@@ -243,6 +245,14 @@ const getDriverCurrentBookingFromDB = async (user: JwtPayload) => {
         bookingStatus: "completed",
       })
     : 0;
+
+  console.log(
+    "Current Trip return Data::::\n",
+    presentBookingForViewer(
+      { ...currentBooking, completedTrips: completedTripCount },
+      user.role,
+    ),
+  );
 
   return presentBookingForViewer(
     { ...currentBooking, completedTrips: completedTripCount },

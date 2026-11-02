@@ -5,6 +5,10 @@ import QueryBuilder from "../../builder/queryBuilder";
 import { IReports } from "./reports.interface";
 import { Reports } from "./reports.model";
 import { Booking } from "../booking/booking.model";
+import { User } from "../user/user.model";
+import { randomUUID } from "crypto";
+import { emailTemplate } from "../../../shared/emailTemplate";
+import { reportAssignedQueue } from "../../../queue/email.queue";
 const createReportIntoDB = async (user: JwtPayload, payload: IReports) => {
   payload.reportedBy = user.id;
   const report = await Reports.create(payload);
@@ -68,12 +72,69 @@ const getReportByIdFromDB = async (id: string) => {
   return report;
 };
 const updateReportInDB = async (id: string, payload: Partial<IReports>) => {
+  const reportData = await Reports.findById(id).lean<IReports>();
+  if (!reportData) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Report not found");
+  }
+
+  const isNewlyAssigned =
+    Boolean(payload.assignedUserId) &&
+    reportData.assignedUserId?.toString() !==
+      payload.assignedUserId?.toString();
+
+  const isNoteUpdated =
+    Boolean(payload.internalNote) &&
+    payload.internalNote !== reportData.internalNote;
+
+  const targetUserId = payload.assignedUserId || reportData.assignedUserId;
+
+  let assignedUser: any = null;
+  if ((isNewlyAssigned || isNoteUpdated) && targetUserId) {
+    assignedUser = await User.findById(targetUserId);
+  }
+
   const report = await Reports.findByIdAndUpdate(id, payload, { new: true });
   if (!report) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Report not found");
   }
+
+  if ((isNewlyAssigned || isNoteUpdated) && assignedUser) {
+    const emailJobId = randomUUID();
+    const fullName = [assignedUser.firstName, assignedUser.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    const subject = isNewlyAssigned
+      ? "Report assigned to you"
+      : "Report update: New note added";
+
+    const createReportTemplate = emailTemplate.reportAssigned({
+      email: assignedUser.email,
+      name: fullName || "User",
+      reportId: `#LOGISS-${report._id.toString().slice(-6)}`,
+      reportTitle: report.reason,
+      reportDescription: report.internalNote || "",
+      reportStatus: report.reportStatus,
+      reportCreatedAt:
+        (report as any).createdAt?.toLocaleString() ||
+        new Date().toLocaleString(),
+    });
+
+    const emailData = {
+      jobId: emailJobId,
+      to: createReportTemplate.to,
+      subject: subject,
+      html: createReportTemplate.html,
+      type: "report_assigned",
+    };
+
+    await reportAssignedQueue.add("report-assigned", emailData);
+  }
+
   return report;
 };
+
 const deleteReportFromDB = async (id: string) => {
   const report = await Reports.findByIdAndDelete(id);
   if (!report) {

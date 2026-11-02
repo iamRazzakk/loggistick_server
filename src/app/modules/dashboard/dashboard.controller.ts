@@ -81,11 +81,25 @@ const getRiderAndUserTripHistory = catchAsync(
     });
   },
 );
-export const DashboardController = {
+
+const getRecent5PendingBookings = catchAsync(
+  async (_req: Request, res: Response, _next: NextFunction) => {
+    const result = await DashboardServices.getRecent5PendingBookingsFromDB();
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: "Recent 5 pending bookings fetched successfully",
+      data: result,
+    });
+  },
+);
+
+  export const DashboardController = {
   dashboardOverview,
   activeTrips,
   pendingTrips,
   getAdminTripDistribution,
   getAdminDashboardOverview,
   getRiderAndUserTripHistory,
+  getRecent5PendingBookings,
 };
