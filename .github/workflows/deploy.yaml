@@ -6,11 +6,10 @@ on:
       - main
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -20,4 +19,6 @@ jobs:
           script: |
             cd /var/www/loggis/backend
             git pull
-            docker compose up -d --build
+            npm ci
+            npm run build
+            pm2 restart loggis_server --update-env
