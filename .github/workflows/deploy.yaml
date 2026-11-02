@@ -17,8 +17,12 @@ jobs:
           username: root
           key: ${{ secrets.SSH_KEY }}
           script: |
+            export NVM_DIR="/root/.nvm"
+            source "$NVM_DIR/nvm.sh"
+            nvm use 24.22.1
+
             cd /var/www/loggis/backend
-            git pull
+            git pull origin main
             npm ci
             npm run build
             pm2 restart loggis_server --update-env
