@@ -7,13 +7,13 @@ const router = express.Router();
 router
   .route("/schedule")
   .get(
-    auth(USER_ROLES.SUPER_ADMIN),
+    auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
     ScheduledController.getAllBookingScheduledToday,
   );
 router
   .route("/schedule/onboarding")
   .get(
-    auth(USER_ROLES.SUPER_ADMIN),
+    auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
     ScheduledController.getTodayScheduledTripsOnboarding,
   );
 

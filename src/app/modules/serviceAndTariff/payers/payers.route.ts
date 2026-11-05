@@ -23,7 +23,6 @@ router
       USER_ROLES.USER,
       USER_ROLES.DRIVER,
     ),
-    checkDispatcherRoute("/finance"),
     PayersController.getAllPayers,
   );
 

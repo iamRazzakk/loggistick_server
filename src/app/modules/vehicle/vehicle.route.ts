@@ -22,7 +22,6 @@ router
       USER_ROLES.DRIVER,
       USER_ROLES.USER,
     ),
-    checkDispatcherRoute("/fleet"),
     VehicleController.getAllVehicles,
   );
 router
