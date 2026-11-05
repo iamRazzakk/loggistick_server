@@ -50,6 +50,10 @@ import {
 } from "../../../shared/tabularExport";
 import { runExportJob } from "../../../helpers/runExportJob";
 import { EXPORT_TRIP_HISTORY_JOB } from "../../../queue/export.queue";
+import {
+  collectSystemLogChanges,
+  SystemLogServices,
+} from "../systemLog/systemLog.service";
 import { isDriverOnDuty } from "../driverduty/driverduty.cache";
 import { pickupAppointmentError } from "../appApi/apiBooking/booking.helper";
 
@@ -453,17 +457,35 @@ const updateBookingInDB = async (
     payload.driverPicupAt = format(new Date(), "yyyy-MM-dd HH:mm:ss");
   }
 
+  const existing = await Booking.findById(id);
+  if (!existing) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
+  }
+
   if (payload.bookingStatus === "completed") {
     const payment = await handlePayment(id);
+    const paymentBooking = payment.booking as unknown as Record<
+      string,
+      unknown
+    >;
+    const changes = collectSystemLogChanges(
+      existing.toObject() as unknown as Record<string, unknown>,
+      paymentBooking,
+      ["bookingStatus", "paymentStatus", "stripeCheckoutSessionId"],
+    );
+    await SystemLogServices.createSystemLogIntoDB({
+      actor: user,
+      action: "UPDATE",
+      module: "booking",
+      entityType: "Booking",
+      entityId: id,
+      description: `Updated booking ${id}`,
+      changes,
+    });
     return {
       checkoutUrl: payment.checkoutUrl,
       paymentStatus: payment.booking.paymentStatus,
     };
-  }
-
-  const existing = await Booking.findById(id);
-  if (!existing) {
-    throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
   }
 
   const shouldReprice = PRICING_INPUTS.some(
@@ -527,6 +549,20 @@ const updateBookingInDB = async (
   if (!booking) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
   }
+  const changes = collectSystemLogChanges(
+    existing.toObject() as unknown as Record<string, unknown>,
+    booking.toObject() as unknown as Record<string, unknown>,
+    Object.keys(payload),
+  );
+  await SystemLogServices.createSystemLogIntoDB({
+    actor: user,
+    action: "UPDATE",
+    module: "booking",
+    entityType: "Booking",
+    entityId: booking._id.toString(),
+    description: `Updated booking ${booking._id.toString()}`,
+    changes,
+  });
   const userData = await User.findById(booking.userId).select(
     "firstName lastName role",
   );
