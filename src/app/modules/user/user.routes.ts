@@ -160,4 +160,29 @@ router
     UserController.getAllDriverApplications,
   );
 
+router.patch(
+  "/driver-application",
+  auth(USER_ROLES.DRIVER),
+  getUploadFields(),
+  async (req: Request, _res: Response, next: NextFunction) => {
+    try {
+      const data = parseBody<Record<string, any>>(req.body);
+      const newLicenseImages = getMultipleFilePaths(
+        req.files as Record<string, Express.Multer.File[]>,
+        "driverData[licenseImage]",
+      );
+
+      if (data.driverData && typeof data.driverData === "object") {
+        delete data.driverData.licenseImage;
+      }
+      data.newLicenseImages = newLicenseImages;
+      req.body = data;
+      next();
+    } catch (error) {
+      next(error);
+    }
+  },
+  UserController.updateDriverApplication,
+);
+
 export const UserRoutes = router;

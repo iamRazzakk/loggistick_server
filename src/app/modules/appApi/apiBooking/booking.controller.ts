@@ -90,12 +90,14 @@ const getDriverCurrentBooking = catchAsync(
   async (req: Request, res: Response) => {
     const booking = await AppApiBookingService.getDriverCurrentBookingFromDB(
       req.user,
+      req.query,
     );
     sendResponse(res, {
       success: true,
       statusCode: StatusCodes.OK,
       message: "Booking fetched successfully",
-      data: booking,
+      pagination: booking.meta,
+      data: booking.data,
     });
   },
 );

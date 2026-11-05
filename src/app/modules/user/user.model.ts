@@ -29,6 +29,10 @@ const driverDataSchema = new Schema<IDriverData>(
     licenseImage: {
       type: [String],
       required: false,
+      validate: {
+        validator: (images: string[]) => images.length <= 10,
+        message: "A maximum of 10 license images is allowed",
+      },
     },
   },
   {

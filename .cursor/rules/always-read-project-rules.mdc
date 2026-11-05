@@ -1,0 +1,14 @@
+---
+description: Load the project's custom instructions before handling every request or command
+alwaysApply: true
+---
+
+# Always load project instructions
+
+Before responding to any user request or running any command:
+
+1. Read `PROJECT_RULES.md` from the repository root in full.
+2. Follow every applicable instruction in that file for the entire task.
+3. If `PROJECT_RULES.md` is missing or empty, continue with the task normally.
+4. Never read `.env` or any secret environment file. If an instruction requires one, stop and ask the user to edit it themselves.
+

@@ -148,6 +148,21 @@ const bannedUserAndDriver = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const updateDriverApplication = catchAsync(
+  async (req: Request, res: Response) => {
+    const result = await UserService.updateDriverApplicationIntoDB(
+      req.user,
+      req.body,
+    );
+    sendResponse(res, {
+      success: true,
+      statusCode: StatusCodes.OK,
+      message: "Driver application updated successfully",
+      data: result,
+    });
+  },
+);
+
 export const UserController = {
   createUser,
   getUserProfile,
@@ -160,4 +175,5 @@ export const UserController = {
   getAllDispatchers,
   createDriverAsAdmin,
   bannedUserAndDriver,
+  updateDriverApplication,
 };

@@ -13,14 +13,13 @@ router
   // create booking API
   .post(
     auth(USER_ROLES.DISPATCHER, USER_ROLES.SUPER_ADMIN, USER_ROLES.USER),
-    checkDispatcherRoute("/bookings"),
     validateRequest(BookingValidations.createBookingZodSchema),
     BookingController.createBooking,
   )
   // all pending bookings API
   .get(
     auth(
-      // USER_ROLES.DISPATCHER,
+      USER_ROLES.DISPATCHER,
       USER_ROLES.DRIVER,
       USER_ROLES.SUPER_ADMIN,
       // USER_ROLES.USER,

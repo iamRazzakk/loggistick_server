@@ -36,7 +36,6 @@ router
       USER_ROLES.DRIVER,
       USER_ROLES.DISPATCHER,
     ),
-    checkDispatcherRoute("/notifications"),
     NotificationController.countUnreadNotifications,
   );
 router

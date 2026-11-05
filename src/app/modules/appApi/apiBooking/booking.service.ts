@@ -12,6 +12,8 @@ import {
   CLOSED_BOOKING_STATUSES,
   STORED_BOOKING_STATUSES,
 } from "./booking.contant";
+import QueryBuilder from "../../../builder/queryBuilder";
+import { IBooking } from "../../booking/booking.interface";
 
 const assertCanViewBooking = (
   user: JwtPayload,
@@ -149,23 +151,58 @@ const getDriverOverviewDataFromDB = async (user: JwtPayload) => {
 // user on going booking
 const getUserOnGoingBookingTodayFromDB = async (user: JwtPayload) => {
   const today = format(new Date(), "yyyy-MM-dd");
-  const booking = await Booking.findOne({
-    userId: new Types.ObjectId(user.id),
-    serviceDate: today,
-    bookingStatus: {
-      $nin: ["cancelled", "completed", "pending"],
-    },
-    driverId: { $ne: null },
-  })
-    .sort({ createdAt: -1 })
-    .populate({
-      path: "driverId",
-      select: "firstName lastName middleName profile contact",
-    })
-    .lean();
+  const [booking] = await Booking.aggregate<IBooking & { _id: Types.ObjectId }>(
+    [
+      {
+        $match: {
+          userId: new Types.ObjectId(user.id),
+          serviceDate: today,
+          bookingStatus: { $nin: ["cancelled", "completed", "pending"] },
+          driverId: { $ne: null },
+        },
+      },
+      {
+        $set: {
+          pickupMinutes: {
+            $add: [
+              {
+                $multiply: [
+                  {
+                    $mod: [
+                      { $toInt: { $substrBytes: ["$pickupTime", 0, 2] } },
+                      12,
+                    ],
+                  },
+                  60,
+                ],
+              },
+              { $toInt: { $substrBytes: ["$pickupTime", 3, 2] } },
+              {
+                $cond: [
+                  { $eq: [{ $substrBytes: ["$pickupTime", 6, 2] }, "PM"] },
+                  720,
+                  0,
+                ],
+              },
+            ],
+          },
+        },
+      },
+      { $sort: { pickupMinutes: 1 } },
+      { $limit: 1 },
+      { $unset: "pickupMinutes" },
+    ],
+  );
 
   if (!booking) return [];
-  const driverId = (booking?.driverId as { _id?: Types.ObjectId } | null)?._id;
+  await Booking.populate(booking, {
+    path: "driverId",
+    select: "firstName lastName middleName profile contact",
+  });
+
+  const driverId = (
+    booking.driverId as unknown as { _id?: Types.ObjectId } | null
+  )?._id;
   if (!driverId) {
     return presentBookingForViewer(
       { ...booking, driverRating: 0, totalTripCompleted: 0 },
@@ -199,75 +236,50 @@ const getUserOnGoingBookingTodayFromDB = async (user: JwtPayload) => {
 
 // driver on current booking (Trip maybe today lot's of but we need to show most recent one)
 
-const getDriverCurrentBookingFromDB = async (user: JwtPayload) => {
-  const todaysBookings = await Booking.find({
-    driverId: new Types.ObjectId(user.id),
-    serviceDate: format(new Date(), "yyyy-MM-dd"),
-    bookingStatus: { $nin: ["cancelled", "completed"] },
-  })
-    .populate({
-      path: "userId",
-      select: "firstName lastName middleName profile contact",
-    })
-    .lean();
+const getDriverCurrentBookingFromDB = async (
+  user: JwtPayload,
+  query: Record<string, unknown>,
+) => {
+  const qb = new QueryBuilder<IBooking>(
+    Booking.find({
+      driverId: new Types.ObjectId(user.id),
+      serviceDate: format(new Date(), "yyyy-MM-dd"),
+      bookingStatus: { $nin: ["cancelled", "completed"] },
+    }),
+    query,
+  )
+    .filter()
+    .populate(["userId"], {
+      userId: "firstName lastName middleName profile contact",
+    });
 
-  const bookingsByPickup = todaysBookings
-    .flatMap((booking) => {
-      const pickupMinutes = toMinutes(booking.pickupTime);
-      return pickupMinutes === null ? [] : [{ booking, pickupMinutes }];
-    })
-    .sort((a, b) => a.pickupMinutes - b.pickupMinutes);
-
-  const [activeOverdueBooking, upcomingBooking] = await Promise.all([
-    bookingsByPickup.find(
-      (item) =>
-        item.pickupMinutes <=
-          new Date().getHours() * 60 + new Date().getMinutes() &&
-        item.booking.bookingStatus !== "completed",
-    ),
-    bookingsByPickup.find(
-      (item) =>
-        item.pickupMinutes >
-        new Date().getHours() * 60 + new Date().getMinutes(),
-    ),
-  ]);
-
-  const currentBooking =
-    activeOverdueBooking?.booking ?? upcomingBooking?.booking;
-
-  if (!currentBooking) return [];
-
-  const passenger = currentBooking.userId as { _id?: Types.ObjectId } | null;
-
-  const completedTripCount = passenger
-    ? await Booking.countDocuments({
-        userId: passenger._id,
-        bookingStatus: "completed",
-      })
-    : 0;
-
-  console.log(
-    "Current Trip return Data::::\n",
-    presentBookingForViewer(
-      { ...currentBooking, completedTrips: completedTripCount },
-      user.role,
-    ),
+  const bookings = await qb.modelQuery.lean().exec();
+  const sortedBookings = bookings.sort(
+    (a: any, b: any) =>
+      (toMinutes(a.pickupTime) ?? 0) - (toMinutes(b.pickupTime) ?? 0),
   );
+  const limit = Number(query.limit) || 10;
+  const page = Number(query.page) || 1;
+  const total = sortedBookings.length;
+  const data = sortedBookings.slice((page - 1) * limit, page * limit);
 
-  return presentBookingForViewer(
-    { ...currentBooking, completedTrips: completedTripCount },
-    user.role,
-  );
+  return {
+    data,
+    meta: {
+      total,
+      limit,
+      page,
+      totalPage: Math.ceil(total / limit),
+    },
+  };
 };
 
 // next 3 trips
 
 const getDriverNextTripFromDB = async (user: JwtPayload) => {
-  const current = await getDriverCurrentBookingFromDB(user);
-  const currentId =
-    current && !Array.isArray(current) && "_id" in current
-      ? String((current as { _id: unknown })._id)
-      : null;
+  const current = await getDriverCurrentBookingFromDB(user, { limit: 1 });
+  const currentBooking = current.data[0];
+  const currentId = currentBooking?._id ? String(currentBooking._id) : null;
 
   const bookings = await Booking.find({
     driverId: new Types.ObjectId(user.id),

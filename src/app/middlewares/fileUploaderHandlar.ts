@@ -28,7 +28,7 @@ const UPLOAD_CONFIG: Record<string, UploadConfigItem> = {
   "driverData[licenseImage]": {
     folder: "image",
     allowedMimeTypes: ["image/jpeg", "image/png", "image/jpg"],
-    maxCount: 3,
+    maxCount: 10,
     maxSize: 20 * 1024 * 1024,
   },
   doc: {

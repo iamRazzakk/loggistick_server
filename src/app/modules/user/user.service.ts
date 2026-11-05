@@ -308,6 +308,86 @@ const bannedUserAndDriverFromDB = async (id: string) => {
   return user;
 };
 
+type DriverApplicationUpdate = Partial<
+  Pick<
+    IUser,
+    | "firstName"
+    | "middleName"
+    | "lastName"
+    | "dateOfBirth"
+    | "contact"
+    | "location"
+  >
+> & {
+  driverData?: Partial<NonNullable<IUser["driverData"]>>;
+  deletedLicenseImages?: string[];
+  newLicenseImages?: string[];
+};
+
+// update the authenticated driver's pending application
+const updateDriverApplicationIntoDB = async (
+  user: JwtPayload,
+  payload: DriverApplicationUpdate,
+) => {
+  const driver = await User.findOne({
+    _id: user.id,
+    role: USER_ROLES.DRIVER,
+  });
+
+  if (!driver) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Driver application not found!");
+  }
+
+  const deletedImages = Array.isArray(payload.deletedLicenseImages)
+    ? new Set(payload.deletedLicenseImages.filter((image) => typeof image === "string"))
+    : new Set<string>();
+  const existingImages = (driver.driverData?.licenseImage ?? []).filter(
+    (image) => !deletedImages.has(image),
+  );
+  const newImages = Array.isArray(payload.newLicenseImages)
+    ? payload.newLicenseImages.filter((image) => typeof image === "string")
+    : [];
+  const licenseImage = [...new Set([...existingImages, ...newImages])];
+
+  if (licenseImage.length > 10) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "A maximum of 10 license images is allowed",
+    );
+  }
+
+  const {
+    deletedLicenseImages: _deletedLicenseImages,
+    newLicenseImages: _newLicenseImages,
+    driverData,
+    ...personalData
+  } = payload;
+  const currentDriverData = driver.toObject().driverData;
+
+  const result = await User.findByIdAndUpdate(
+    driver._id,
+    {
+      $set: {
+        ...personalData,
+        driverData: {
+          ...currentDriverData,
+          ...driverData,
+          licenseImage,
+        },
+      },
+    },
+    { new: true, runValidators: true },
+  );
+
+  if (!result) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "Failed to update driver application",
+    );
+  }
+  return result;
+};
+
 export const UserService = {
   createUserToDB,
   getUserProfileFromDB,
@@ -320,4 +400,5 @@ export const UserService = {
   getAllDispatchersFromDB,
   createDriverAsAdminIntoDB,
   bannedUserAndDriverFromDB,
+  updateDriverApplicationIntoDB,
 };
