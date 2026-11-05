@@ -29,6 +29,7 @@ import { PaymentRoutes } from "../modules/payment/payment.route";
 import { BroadcastNotificationRoutes } from "../modules/broadcast_notification/broadcast.route";
 import { ContuctDispatcherRoutes } from "../modules/appApi/contuct/contuctDispatcher.routes";
 import { DriverDutyRoutes } from "../modules/driverduty/driverduty.route";
+import { SystemLogRoutes } from "../modules/systemLog/systemLog.route";
 
 const router = express.Router();
 
@@ -63,6 +64,7 @@ const apiRoutes = [
   { path: "/payment", route: PaymentRoutes },
   { path: "/contuct-dispatcher", route: ContuctDispatcherRoutes },
   { path: "/driver-duty", route: DriverDutyRoutes },
+  { path: "/system-logs", route: SystemLogRoutes },
 ];
 
 apiRoutes.forEach((route) => router.use(route.path, route.route));
