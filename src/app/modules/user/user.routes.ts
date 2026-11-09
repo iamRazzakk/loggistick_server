@@ -37,7 +37,19 @@ router
         const data = req.body;
         const licenseImage = getMultipleFilePaths(
           req.files as Record<string, Express.Multer.File[]>,
-          "image",
+          "driverData.licenseImage",
+        );
+
+        // Backward compatibility for the previous multipart field names.
+        licenseImage.push(
+          ...getMultipleFilePaths(
+            req.files as Record<string, Express.Multer.File[]>,
+            "driverData[licenseImage]",
+          ),
+          ...getMultipleFilePaths(
+            req.files as Record<string, Express.Multer.File[]>,
+            "image",
+          ),
         );
 
         if (licenseImage.length) {
@@ -105,20 +117,29 @@ router
 
 router.patch(
   "/dispatcher/:id/routes",
-  auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+  auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER, USER_ROLES.DRIVER),
   validateRequest(UserValidation.updateDispatcherRoutesZodSchema),
   UserController.updateDispatcherRoutes,
 );
-router.route("/driver").post(
+router.route("/driver")
+.post(
   getUploadFields(),
-  auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+  auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER, USER_ROLES.DRIVER),
   async (req: Request, _res: Response, next: NextFunction) => {
     try {
       const data = parseBody<Record<string, any>>(req.body);
 
       const licenseImage = getMultipleFilePaths(
         req.files as Record<string, Express.Multer.File[]>,
-        "driverData[licenseImage]",
+        "driverData.licenseImage",
+      );
+
+      // Keep accepting the previous bracket-style multipart key.
+      licenseImage.push(
+        ...getMultipleFilePaths(
+          req.files as Record<string, Express.Multer.File[]>,
+          "driverData[licenseImage]",
+        ),
       );
 
       if (licenseImage.length) {
@@ -169,7 +190,15 @@ router.patch(
       const data = parseBody<Record<string, any>>(req.body);
       const newLicenseImages = getMultipleFilePaths(
         req.files as Record<string, Express.Multer.File[]>,
-        "driverData[licenseImage]",
+        "driverData.licenseImage",
+      );
+
+      // Keep accepting the previous bracket-style multipart key.
+      newLicenseImages.push(
+        ...getMultipleFilePaths(
+          req.files as Record<string, Express.Multer.File[]>,
+          "driverData[licenseImage]",
+        ),
       );
 
       if (data.driverData && typeof data.driverData === "object") {
