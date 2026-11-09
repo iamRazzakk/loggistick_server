@@ -25,10 +25,8 @@ const upsertCompanySupportIntoDB = async (
 
 const getCompanySupportFromDB = async (): Promise<ICompanySupport> => {
   const result = await CompanySupport.findOne({}).select("-__v").lean();
-  if (!result) {
-    throw new ApiError(StatusCodes.NOT_FOUND, "Company support not found");
-  }
-  return result;
+
+  return result ? result : ({} as ICompanySupport);
 };
 
 export const CompanySupportServices = {

@@ -339,7 +339,11 @@ const updateDriverApplicationIntoDB = async (
   }
 
   const deletedImages = Array.isArray(payload.deletedLicenseImages)
-    ? new Set(payload.deletedLicenseImages.filter((image) => typeof image === "string"))
+    ? new Set(
+        payload.deletedLicenseImages.filter(
+          (image) => typeof image === "string",
+        ),
+      )
     : new Set<string>();
   const existingImages = (driver.driverData?.licenseImage ?? []).filter(
     (image) => !deletedImages.has(image),
