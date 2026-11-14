@@ -1,4 +1,4 @@
-import { Model } from "mongoose";
+import { Model, Types } from "mongoose";
 
 export type IFundingSources = {
   name: string;
@@ -9,6 +9,12 @@ export type IFundingSources = {
     | "facility"
     | "private"
     | "other";
+  programName?: string;
+  description?: string;
+  effectiveFrom?: string | null;
+  effectiveUntil?: string | null;
+  /** Optional default county tariff for this funding source contract. */
+  defaultCountyId?: Types.ObjectId | null;
   status: boolean;
   isDeleted: boolean;
 };

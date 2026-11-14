@@ -182,6 +182,12 @@ const calculateTotalTripPrice = catchAsync(
       userId,
       serviceDate,
       actualGpsMileage,
+      req.body.tripReason,
+      req.body.passengerSeats == null
+        ? undefined
+        : Number(req.body.passengerSeats),
+      Boolean(req.body.adminOverride),
+      req.body.adminOverrideReason,
     );
     sendResponse(res, {
       statusCode: StatusCodes.OK,

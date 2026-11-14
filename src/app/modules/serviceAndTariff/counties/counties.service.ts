@@ -2,9 +2,39 @@ import { StatusCodes } from "http-status-codes";
 import ApiError from "../../../../errors/ApiErrors";
 import { redisService } from "../../../../redis/redis.service";
 import { Payers } from "../payers/payers.model";
+import { countyPointGeoFilter } from "./counties.geofence.utils";
+import {
+  geofencesFromLegacyPolygon,
+  unionGeometryFromGeofences,
+} from "./counties.geofence.utils";
 import { ICounty } from "./counties.interface";
 import { County } from "./counties.model";
+import {
+  defaultPriceMethodFromRules,
+  zonePricingFromPricingRules,
+} from "./counties.pricingRules.utils";
 import { getPriceFieldsToUnset } from "./counties.sanitizeByPriceMethod.utils";
+
+const prepareCountyPayload = (payload: Partial<ICounty>): Partial<ICounty> => {
+  const next = { ...payload };
+
+  if ((!next.geofences || !next.geofences.length) && next.coversAreasGeoJSON) {
+    next.geofences = geofencesFromLegacyPolygon(next.coversAreasGeoJSON);
+  }
+  if (next.geofences?.length) {
+    next.coversAreasGeoJSON = unionGeometryFromGeofences(next.geofences);
+  }
+  if (next.pricingRules?.length) {
+    next.zonePricing = zonePricingFromPricingRules(
+      next.pricingRules,
+      next.zonePricing,
+    );
+    if (!next.priceMethod) {
+      next.priceMethod = defaultPriceMethodFromRules(next.pricingRules);
+    }
+  }
+  return next;
+};
 
 const createCountiesIntoDB = async (payload: ICounty) => {
   const payer = await Payers.findById(payload.payersId).lean();
@@ -12,14 +42,24 @@ const createCountiesIntoDB = async (payload: ICounty) => {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Payer not found");
   }
 
-  const result = await County.create(payload);
+  const prepared = prepareCountyPayload(payload) as ICounty;
+  if (!prepared.geofences?.length && !prepared.coversAreasGeoJSON) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "At least one geofence (JSON upload) is required",
+    );
+  }
+
+  const result = await County.create(prepared);
   if (!result) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to create county");
   }
 
   await redisService.del("counties");
   await redisService.del("counties:list");
+  await redisService.del("counties:list:v2");
   await redisService.del(`counties:payer:${result.payersId.toString()}`);
+  await redisService.del(`counties:payer:${result.payersId.toString()}:v2`);
   await redisService.del(`counties:${result._id.toString()}`);
 
   await redisService.post({
@@ -32,7 +72,10 @@ const createCountiesIntoDB = async (payload: ICounty) => {
 };
 
 const getAllCountiesFromDB = async (payersId?: string) => {
-  const cacheKey = payersId ? `counties:payer:${payersId}` : "counties:list";
+  // v2: include contract `name` (Funding Source name) for admin list UI
+  const cacheKey = payersId
+    ? `counties:payer:${payersId}:v2`
+    : "counties:list:v2";
   const cachedCounties = await redisService.get(cacheKey);
   if (cachedCounties) {
     return JSON.parse(cachedCounties);
@@ -44,8 +87,9 @@ const getAllCountiesFromDB = async (payersId?: string) => {
   }
 
   const result = await County.find(filter)
-    .select("_id payersId priceMethod")
-    .populate("payersId", "name type isActive")
+    .select(
+      "_id name programName organizationType priceMethod isActive geofences fundingSourceId",
+    )
     .lean();
 
   if (result.length) {
@@ -103,10 +147,11 @@ const updateCountiesFromDB = async (id: string, payload: Partial<ICounty>) => {
     }
   }
 
-  const updateQuery: Record<string, unknown> = { $set: payload };
+  const prepared = prepareCountyPayload(payload);
+  const updateQuery: Record<string, unknown> = { $set: prepared };
 
-  if (payload.priceMethod) {
-    updateQuery.$unset = getPriceFieldsToUnset(payload.priceMethod);
+  if (prepared.priceMethod) {
+    updateQuery.$unset = getPriceFieldsToUnset(prepared.priceMethod);
   }
 
   const result = await County.findByIdAndUpdate(id, updateQuery, {
@@ -120,11 +165,14 @@ const updateCountiesFromDB = async (id: string, payload: Partial<ICounty>) => {
 
   await redisService.del("counties");
   await redisService.del("counties:list");
+  await redisService.del("counties:list:v2");
   await redisService.del(`county:${id}`);
   await redisService.del(`counties:${id}`);
   await redisService.del(`counties:payer:${existing.payersId.toString()}`);
+  await redisService.del(`counties:payer:${existing.payersId.toString()}:v2`);
   await redisService.del(`counties:${existing.payersId.toString()}`);
   await redisService.del(`counties:payer:${result.payersId.toString()}`);
+  await redisService.del(`counties:payer:${result.payersId.toString()}:v2`);
 
   return result;
 };
@@ -144,10 +192,12 @@ const deleteCountiesFromDB = async (id: string) => {
 
   await redisService.del("counties");
   await redisService.del("counties:list");
+  await redisService.del("counties:list:v2");
   await redisService.del(`county:${id}`);
   await redisService.del(`counties:${id}`);
   if (existing?.payersId) {
     await redisService.del(`counties:payer:${existing.payersId.toString()}`);
+    await redisService.del(`counties:payer:${existing.payersId.toString()}:v2`);
     await redisService.del(`counties:${existing.payersId.toString()}`);
   }
 
@@ -164,14 +214,7 @@ const findCountyByLocationFromDB = async (lng: number, lat: number) => {
 
   const result = await County.find({
     isActive: true,
-    coversAreasGeoJSON: {
-      $geoIntersects: {
-        $geometry: {
-          type: "Point",
-          coordinates: [lng, lat],
-        },
-      },
-    },
+    ...countyPointGeoFilter([lng, lat]),
   })
     .populate("payersId", "name type isActive")
     .lean();
@@ -185,7 +228,8 @@ const updateCountiesAdminFromDB = async (
 ) => {
   const existing = await County.findById(id).select("payersId").lean();
 
-  const result = await County.findByIdAndUpdate(id, payload, {
+  const prepared = prepareCountyPayload(payload);
+  const result = await County.findByIdAndUpdate(id, prepared, {
     new: true,
     runValidators: true,
   });
@@ -196,13 +240,16 @@ const updateCountiesAdminFromDB = async (
 
   await redisService.del("counties");
   await redisService.del("counties:list");
+  await redisService.del("counties:list:v2");
   await redisService.del(`county:${id}`);
   await redisService.del(`counties:${id}`);
   if (existing?.payersId) {
     await redisService.del(`counties:payer:${existing.payersId.toString()}`);
+    await redisService.del(`counties:payer:${existing.payersId.toString()}:v2`);
     await redisService.del(`counties:${existing.payersId.toString()}`);
   }
   await redisService.del(`counties:payer:${result.payersId.toString()}`);
+  await redisService.del(`counties:payer:${result.payersId.toString()}:v2`);
 
   return result;
 };

@@ -27,19 +27,32 @@ const ALL_PRICE_FIELD_KEYS = [
 
 const COMMON_KEYS = [
   "payersId",
+  "fundingSourceId",
+  "name",
+  "organizationType",
+  "programName",
+  "description",
+  "geofences",
   "coversAreasGeoJSON",
   "priceMethod",
   "insidePrice",
   "outsidePrice",
   "isActive",
   "zonePricing",
+  "pricingRules",
   "passengerCopayInside",
   "passengerCopayOutside",
+  "authorizeCopayAtBooking",
+  "captureCopayAfterCompletedTrip",
   "mileageSource",
   "mileageRounding",
   "mileagePrecision",
   "mobilityBillingMap",
   "chargeRules",
+  "cancellationNoShow",
+  "eligibility",
+  "programRules",
+  "reporting",
   "effectiveFrom",
   "effectiveTo",
 ] as const;
@@ -200,6 +213,9 @@ export const sanitizeCountyPayloadByPriceMethod = (
   const mileage = buildMileageBasedPrice(body);
   if (mileage) {
     sanitized.mileage_based_price = mileage;
+  }
+  if (body.mileage_brackets !== undefined) {
+    sanitized.mileage_brackets = body.mileage_brackets;
   }
 
   return sanitized;

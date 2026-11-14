@@ -27,6 +27,11 @@ import {
   toBookingErrorMessage,
 } from "./booking.utils";
 import {
+  assertContractRulesBeforePrice,
+  assertMaxMilesAfterQuote,
+  companionChargeFor,
+} from "./booking.contractRules";
+import {
   notifyAdmins,
   sendNotifications,
   sendPushNotification,
@@ -56,6 +61,7 @@ import {
 } from "../systemLog/systemLog.service";
 import { isDriverOnDuty } from "../driverduty/driverduty.cache";
 import { pickupAppointmentError } from "../appApi/apiBooking/booking.helper";
+import { County } from "../serviceAndTariff/counties/counties.model";
 
 const JOB_WAIT_MS = 120_000;
 
@@ -94,6 +100,27 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
   payload.userId = new Types.ObjectId(payload.userId ?? user.id);
   const riderId =
     actor?.role === USER_ROLES.USER ? user.id : String(payload.userId);
+  const bookingExtras = payload as IBooking & {
+    countyId?: string;
+    adminOverride?: boolean;
+    adminOverrideReason?: string;
+    actualGpsMileage?: number;
+  };
+  const rules = await assertContractRulesBeforePrice({
+    pickup: payload.pickupLocation as [number, number],
+    dropoff: payload.dropOffLocation as [number, number],
+    stop: payload.stopAddress?.length
+      ? (payload.stopAddress as [number, number])
+      : undefined,
+    payerId: payload.payerSource?.toString(),
+    countyId: bookingExtras.countyId?.toString(),
+    userId: riderId,
+    serviceDate: payload.serviceDate,
+    tripReason: payload.tripReason,
+    passengerSeats: payload.passengerSeats,
+    adminOverride: bookingExtras.adminOverride,
+    adminOverrideReason: bookingExtras.adminOverrideReason,
+  });
   const quote = await getTripPrice({
     pickup: payload.pickupLocation as [number, number],
     dropoff: payload.dropOffLocation as [number, number],
@@ -101,15 +128,32 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
       ? (payload.stopAddress as [number, number])
       : undefined,
     payerId: payload.payerSource?.toString(),
-    countyId: (
-      payload as IBooking & { countyId?: string }
-    ).countyId?.toString(),
+    countyId: bookingExtras.countyId?.toString() ?? String(rules.county._id),
     userId: riderId,
     tripType: payload.tripType,
     mobilityRequirements: payload.mobilityRequirements?.toString(),
     serviceDate: payload.serviceDate,
-    actualGpsMileage: payload.actualGpsMileage,
+    actualGpsMileage: bookingExtras.actualGpsMileage,
   });
+  assertMaxMilesAfterQuote({
+    county: rules.county,
+    zone: quote.zone,
+    tripReason: payload.tripReason,
+    billingMileage: quote.billingMileage,
+    adminOverride: bookingExtras.adminOverride,
+    adminOverrideReason: bookingExtras.adminOverrideReason,
+    priorViolations: rules.violations,
+  });
+  const companionFee = companionChargeFor(
+    rules.county,
+    payload.passengerSeats,
+  );
+  if (companionFee > 0) {
+    quote.fundingSourceCharge += companionFee;
+    quote.totalPrice += companionFee;
+    quote.organizationContribution += companionFee;
+  }
+  payload.countyId = rules.county._id;
   applyServerFare(payload, quote);
 
   const notifyAdminOfPendingBooking = async (referenceId: string) => {
@@ -524,13 +568,61 @@ const updateBookingInDB = async (
   if (payload.bookingStatus === "cancelled") {
     const outcome =
       payload.cancellationOutcome ?? existing.cancellationOutcome ?? "both";
-    const fundingSourceCharge =
+
+    let fundingSourceCharge =
       payload.organizationContribution ??
       existing.organizationContribution ??
       existing.totalPrice ??
       0;
-    const passengerCopay =
+    let passengerCopay =
       payload.passengerCoPay ?? existing.passengerCoPay ?? 0;
+
+    const countyId = (
+      existing as IBooking & { countyId?: Types.ObjectId }
+    ).countyId;
+    if (countyId) {
+      const county = await County.findById(countyId)
+        .select("cancellationNoShow")
+        .lean();
+      const fees = county?.cancellationNoShow;
+      if (fees) {
+        const isNoShow = Boolean(
+          (payload as { isNoShow?: boolean }).isNoShow ??
+            (payload as { noShow?: boolean }).noShow,
+        );
+        if (isNoShow) {
+          if (fees.noShowPassenger != null) {
+            passengerCopay = fees.noShowPassenger;
+          }
+          if (fees.noShowFundingSource != null) {
+            fundingSourceCharge = fees.noShowFundingSource;
+          }
+        } else {
+          const windowHrs = fees.freeCancellationWindowHours ?? 2;
+          const pickupMs = Date.parse(
+            `${existing.serviceDate}T${existing.pickupTime || "00:00"}`,
+          );
+          const hoursBefore =
+            Number.isFinite(pickupMs) && !Number.isNaN(pickupMs)
+              ? (pickupMs - Date.now()) / (1000 * 60 * 60)
+              : null;
+          const freeCancel =
+            hoursBefore != null && hoursBefore >= windowHrs;
+          if (freeCancel) {
+            passengerCopay = 0;
+            fundingSourceCharge = 0;
+          } else {
+            if (fees.lateCancellationPassenger != null) {
+              passengerCopay = fees.lateCancellationPassenger;
+            }
+            if (fees.lateCancellationFundingSource != null) {
+              fundingSourceCharge = fees.lateCancellationFundingSource;
+            }
+          }
+        }
+      }
+    }
+
     const adjusted = fareAfterChargeOutcome(
       fundingSourceCharge,
       passengerCopay,
@@ -540,9 +632,7 @@ const updateBookingInDB = async (
       adjusted.paymentStatus = "paid";
     }
     Object.assign(payload, adjusted);
-    if (payload.bookingStatus === "cancelled") {
-      payload.cancelledBy = new Types.ObjectId(user.id);
-    }
+    payload.cancelledBy = new Types.ObjectId(user.id);
   }
 
   const booking = await Booking.findByIdAndUpdate(id, payload, { new: true });
@@ -689,19 +779,52 @@ const calculateTotalTripPrice = async (
   userId?: string,
   serviceDate?: string,
   actualGpsMileage?: number,
+  tripReason?: string,
+  passengerSeats?: number,
+  adminOverride?: boolean,
+  adminOverrideReason?: string,
 ) => {
-  return await getTripPrice({
+  const rules = await assertContractRulesBeforePrice({
     pickup: pickupLocation,
     dropoff: dropoffLocation,
     stop: stopAddress,
     payerId,
     countyId,
     userId,
+    serviceDate,
+    tripReason,
+    passengerSeats,
+    adminOverride,
+    adminOverrideReason,
+  });
+  const quote = await getTripPrice({
+    pickup: pickupLocation,
+    dropoff: dropoffLocation,
+    stop: stopAddress,
+    payerId,
+    countyId: countyId ?? String(rules.county._id),
+    userId,
     tripType,
     mobilityRequirements,
     serviceDate,
     actualGpsMileage,
   });
+  assertMaxMilesAfterQuote({
+    county: rules.county,
+    zone: quote.zone,
+    tripReason,
+    billingMileage: quote.billingMileage,
+    adminOverride,
+    adminOverrideReason,
+    priorViolations: rules.violations,
+  });
+  const companionFee = companionChargeFor(rules.county, passengerSeats);
+  if (companionFee > 0) {
+    quote.fundingSourceCharge += companionFee;
+    quote.totalPrice += companionFee;
+    quote.organizationContribution += companionFee;
+  }
+  return quote;
 };
 
 export const BookingServices = {

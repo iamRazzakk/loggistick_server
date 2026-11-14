@@ -78,10 +78,59 @@ const coversAreasGeoJSONZodSchema = z.object({
   }),
 });
 
+const geofenceSchema = z.object({
+  name: z.string().min(1, "Geofence name is required"),
+  geometry: coversAreasGeoJSONZodSchema,
+  isActive: z.boolean().optional().default(true),
+});
+
+const tripReasonSchema = z.object({
+  name: z.string().min(1, "Trip reason name is required"),
+  inside: z.enum(["allowed", "blocked"]).default("allowed"),
+  outside: z.enum(["allowed", "blocked"]).default("allowed"),
+  maxMiles: z.coerce.number().min(0).nullable().optional(),
+});
+
+const pricingRuleSchema = z.object({
+  ruleName: z.string().min(1, "Pricing rule name is required"),
+  billingClass: z.string().min(1, "Billing class is required"),
+  area: z.enum(["inside", "outside", "both"]).default("both"),
+  method: z.enum([
+    "flat_rate",
+    "base_plus_additional_mileage",
+    "mileage_brackets",
+    "per_mile",
+    "mileage_based",
+    "first_x_miles",
+  ]),
+  flatRate: z.coerce.number().min(0).optional(),
+  includedMiles: z.coerce.number().min(0).optional(),
+  baseRate: z.coerce.number().min(0).optional(),
+  additionalMileRate: z.coerce.number().min(0).optional(),
+  brackets: z
+    .array(
+      z.object({
+        from: z.coerce.number().min(0),
+        to: z.coerce.number().min(0).nullable().optional(),
+        amount: z.coerce.number().min(0),
+      }),
+    )
+    .optional(),
+});
+
 const countyBodyBaseSchema = z.object({
   payersId: checkValidID("Valid payersId is required"),
+  fundingSourceId: checkValidID("Valid fundingSourceId is required")
+    .nullable()
+    .optional(),
 
-  coversAreasGeoJSON: coversAreasGeoJSONZodSchema,
+  name: z.string().min(1).optional(),
+  organizationType: z.string().optional(),
+  programName: z.string().optional(),
+  description: z.string().optional(),
+
+  geofences: z.array(geofenceSchema).optional(),
+  coversAreasGeoJSON: coversAreasGeoJSONZodSchema.optional(),
 
   priceMethod: z.enum(PRICE_METHODS, {
     required_error: "Price method is required",
@@ -107,8 +156,13 @@ const countyBodyBaseSchema = z.object({
       outside: zoneRateCardSchema.optional(),
     })
     .optional(),
+  pricingRules: z.array(pricingRuleSchema).optional(),
+
   passengerCopayInside: z.coerce.number().min(0).optional(),
   passengerCopayOutside: z.coerce.number().min(0).optional(),
+  authorizeCopayAtBooking: z.boolean().optional(),
+  captureCopayAfterCompletedTrip: z.boolean().optional(),
+
   mileageSource: z
     .enum(["calculated_route", "actual_gps", "straight_line"])
     .optional(),
@@ -117,8 +171,10 @@ const countyBodyBaseSchema = z.object({
   mobilityBillingMap: z
     .array(
       z.object({
-        mobilityId: checkValidID("Valid mobilityId is required"),
+        mobilityId: checkValidID("Valid mobilityId is required").optional(),
+        spaceType: z.string().optional(),
         billingClass: z.string().min(1, "Billing class is required"),
+        status: z.enum(["enabled", "disabled"]).optional().default("enabled"),
       }),
     )
     .optional(),
@@ -126,6 +182,43 @@ const countyBodyBaseSchema = z.object({
     .object({
       cancellation: z.enum(CHARGE_OUTCOMES).optional(),
       noShow: z.enum(CHARGE_OUTCOMES).optional(),
+    })
+    .optional(),
+  cancellationNoShow: z
+    .object({
+      freeCancellationWindowHours: z.coerce.number().min(0).optional(),
+      lateCancellationPassenger: z.coerce.number().min(0).optional(),
+      lateCancellationFundingSource: z.coerce.number().min(0).optional(),
+      noShowPassenger: z.coerce.number().min(0).optional(),
+      noShowFundingSource: z.coerce.number().min(0).optional(),
+    })
+    .optional(),
+  eligibility: z
+    .object({
+      authorizationIdRequired: z.boolean().optional(),
+      monthlyTripLimit: z.coerce.number().min(0).optional(),
+      allowAdminOverride: z.boolean().optional(),
+      eligibilityNotes: z.string().optional(),
+    })
+    .optional(),
+  programRules: z
+    .object({
+      extraStopsAllowed: z.boolean().optional(),
+      companionsAllowed: z.boolean().optional(),
+      maximumCompanions: z.coerce.number().min(0).optional(),
+      companionCharge: z.coerce.number().min(0).optional(),
+      tripReasons: z.array(tripReasonSchema).optional(),
+    })
+    .optional(),
+  reporting: z
+    .object({
+      templateName: z.string().optional(),
+      columns: z.array(z.string()).optional(),
+      complaintResponseDeadlineHours: z.coerce.number().min(0).optional(),
+      safetyIncidentReportingDeadlineHours: z.coerce
+        .number()
+        .min(0)
+        .optional(),
     })
     .optional(),
   effectiveFrom: z
@@ -138,7 +231,6 @@ const countyBodyBaseSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, "effectiveTo must be YYYY-MM-DD")
     .nullable()
     .optional(),
-  // boolean already coerced in parseCountyUpload (FormData)
   isActive: z.boolean().optional().default(true),
 });
 
@@ -215,6 +307,17 @@ const priceMethodRefine = (
   data: z.infer<typeof countyBodyBaseSchema>,
   ctx: z.RefinementCtx,
 ) => {
+  const hasGeofences = Boolean(data.geofences?.length);
+  const hasLegacyGeo = Boolean(data.coversAreasGeoJSON);
+  if (!hasGeofences && !hasLegacyGeo) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["geofences"],
+      message:
+        "At least one geofence is required (upload JSON FeatureCollection or provide geofences[])",
+    });
+  }
+
   addRateCardIssues(data, ctx, []);
   if (data.mileage_brackets?.length) {
     const problem = bracketError(data.mileage_brackets);
@@ -258,8 +361,15 @@ const createCountyZodSchema = z.object({
 
 const updateCountyZodSchema = z.object({
   body: countyBodyBaseSchema.partial().superRefine((data, ctx) => {
-    if (data.priceMethod || data.zonePricing || data.mileage_brackets) {
-      priceMethodRefine(data as z.infer<typeof countyBodyBaseSchema>, ctx);
+    if (
+      data.priceMethod ||
+      data.zonePricing ||
+      data.mileage_brackets ||
+      data.pricingRules
+    ) {
+      if (data.priceMethod) {
+        priceMethodRefine(data as z.infer<typeof countyBodyBaseSchema>, ctx);
+      }
     }
   }),
 });

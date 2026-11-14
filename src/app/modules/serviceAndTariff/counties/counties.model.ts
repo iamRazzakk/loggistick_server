@@ -21,13 +21,19 @@ const mileageBracketSchema = new Schema(
 
 const mobilityBillingMapSchema = new Schema(
   {
-    mobilityId: { type: Schema.Types.ObjectId, ref: "Mobility", required: true },
+    mobilityId: { type: Schema.Types.ObjectId, ref: "Mobility" },
+    spaceType: { type: String },
     billingClass: { type: String, required: true },
+    status: {
+      type: String,
+      enum: ["enabled", "disabled"],
+      default: "enabled",
+    },
   },
   { _id: false },
 );
 
-const coversAreasGeoJSONSchema = new Schema(
+const geometrySchema = new Schema(
   {
     type: {
       type: String,
@@ -42,6 +48,68 @@ const coversAreasGeoJSONSchema = new Schema(
   { _id: false },
 );
 
+const geofenceSchema = new Schema(
+  {
+    name: { type: String, required: true },
+    geometry: { type: geometrySchema, required: true },
+    isActive: { type: Boolean, default: true },
+  },
+  { _id: false },
+);
+
+const tripReasonSchema = new Schema(
+  {
+    name: { type: String, required: true },
+    inside: { type: String, enum: ["allowed", "blocked"], default: "allowed" },
+    outside: {
+      type: String,
+      enum: ["allowed", "blocked"],
+      default: "allowed",
+    },
+    maxMiles: { type: Number },
+  },
+  { _id: false },
+);
+
+const pricingRuleBracketSchema = new Schema(
+  {
+    from: { type: Number, required: true },
+    to: { type: Number },
+    amount: { type: Number, required: true },
+  },
+  { _id: false },
+);
+
+const pricingRuleSchema = new Schema(
+  {
+    ruleName: { type: String, required: true },
+    billingClass: { type: String, required: true },
+    area: {
+      type: String,
+      enum: ["inside", "outside", "both"],
+      default: "both",
+    },
+    method: {
+      type: String,
+      enum: [
+        "flat_rate",
+        "base_plus_additional_mileage",
+        "mileage_brackets",
+        "per_mile",
+        "mileage_based",
+        "first_x_miles",
+      ],
+      required: true,
+    },
+    flatRate: { type: Number },
+    includedMiles: { type: Number },
+    baseRate: { type: Number },
+    additionalMileRate: { type: Number },
+    brackets: { type: [pricingRuleBracketSchema], default: undefined },
+  },
+  { _id: false },
+);
+
 const countySchema = new Schema<ICounty>(
   {
     payersId: {
@@ -49,10 +117,21 @@ const countySchema = new Schema<ICounty>(
       ref: "Payers",
       required: true,
     },
+    fundingSourceId: {
+      type: Schema.Types.ObjectId,
+      ref: "FundingSources",
+      default: null,
+    },
 
+    name: { type: String },
+    organizationType: { type: String },
+    programName: { type: String },
+    description: { type: String },
+
+    geofences: { type: [geofenceSchema], default: undefined },
     coversAreasGeoJSON: {
-      type: coversAreasGeoJSONSchema,
-      required: true,
+      type: geometrySchema,
+      required: false,
     },
 
     priceMethod: {
@@ -61,19 +140,14 @@ const countySchema = new Schema<ICounty>(
       required: true,
     },
 
-    // flat_rate
     flat_rate_price: { type: Number },
-
-    // per_mile
     starting_fare: { type: Number },
     first_miles_price: { type: Number },
     per_mile_price: { type: Number },
     base_rate: { type: Number },
     per_mile_rate: { type: Number },
-
     mileage_based_price: { type: [mileageBasedPriceSchema], default: [] },
     mileage_brackets: { type: [mileageBracketSchema], default: undefined },
-
     initial_miles: { type: Number },
     initial_charge: { type: Number },
     additional_per_mile: { type: Number },
@@ -82,8 +156,13 @@ const countySchema = new Schema<ICounty>(
     outsidePrice: { type: Number },
 
     zonePricing: { type: Schema.Types.Mixed },
+    pricingRules: { type: [pricingRuleSchema], default: undefined },
+
     passengerCopayInside: { type: Number },
     passengerCopayOutside: { type: Number },
+    authorizeCopayAtBooking: { type: Boolean },
+    captureCopayAfterCompletedTrip: { type: Boolean },
+
     mileageSource: {
       type: String,
       enum: ["calculated_route", "actual_gps", "straight_line"],
@@ -93,7 +172,10 @@ const countySchema = new Schema<ICounty>(
       enum: ["none", "nearest", "up", "down"],
     },
     mileagePrecision: { type: Number },
-    mobilityBillingMap: { type: [mobilityBillingMapSchema], default: undefined },
+    mobilityBillingMap: {
+      type: [mobilityBillingMapSchema],
+      default: undefined,
+    },
     chargeRules: {
       cancellation: {
         type: String,
@@ -104,6 +186,34 @@ const countySchema = new Schema<ICounty>(
         enum: ["none", "passenger_only", "funding_source_only", "both"],
       },
     },
+    cancellationNoShow: {
+      freeCancellationWindowHours: { type: Number, default: 2 },
+      lateCancellationPassenger: { type: Number },
+      lateCancellationFundingSource: { type: Number },
+      noShowPassenger: { type: Number },
+      noShowFundingSource: { type: Number },
+    },
+
+    eligibility: {
+      authorizationIdRequired: { type: Boolean, default: false },
+      monthlyTripLimit: { type: Number, default: 0 },
+      allowAdminOverride: { type: Boolean, default: false },
+      eligibilityNotes: { type: String },
+    },
+    programRules: {
+      extraStopsAllowed: { type: Boolean, default: true },
+      companionsAllowed: { type: Boolean, default: false },
+      maximumCompanions: { type: Number },
+      companionCharge: { type: Number },
+      tripReasons: { type: [tripReasonSchema], default: undefined },
+    },
+    reporting: {
+      templateName: { type: String },
+      columns: { type: [String], default: undefined },
+      complaintResponseDeadlineHours: { type: Number, default: 72 },
+      safetyIncidentReportingDeadlineHours: { type: Number, default: 24 },
+    },
+
     effectiveFrom: { type: String },
     effectiveTo: { type: String },
 
@@ -118,8 +228,9 @@ const countySchema = new Schema<ICounty>(
   },
 );
 
-// Geo queries ($geoIntersects / $geoWithin)
+countySchema.index({ "geofences.geometry": "2dsphere" });
 countySchema.index({ coversAreasGeoJSON: "2dsphere" });
 countySchema.index({ payersId: 1 });
+countySchema.index({ fundingSourceId: 1 });
 
 export const County = model<ICounty>("County", countySchema);

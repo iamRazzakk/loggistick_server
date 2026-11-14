@@ -3,6 +3,7 @@ import { StatusCodes } from "http-status-codes";
 import { Types } from "mongoose";
 import ApiError from "../../../errors/ApiErrors";
 import { USER_ROLES } from "../../../enums/user";
+import { countyPointGeoFilter } from "../serviceAndTariff/counties/counties.geofence.utils";
 import { ICounty } from "../serviceAndTariff/counties/counties.interface";
 import { County } from "../serviceAndTariff/counties/counties.model";
 import { Booking } from "./booking.model";
@@ -172,11 +173,7 @@ const findCountyForPoint = (
   const filter: Record<string, unknown> = {
     isActive: true,
     ...effectiveFilter(serviceDay),
-    coversAreasGeoJSON: {
-      $geoIntersects: {
-        $geometry: { type: "Point", coordinates: point },
-      },
-    },
+    ...countyPointGeoFilter(point),
   };
   if (payerId && Types.ObjectId.isValid(payerId)) {
     filter.payersId = new Types.ObjectId(payerId);
@@ -239,18 +236,15 @@ const countyCoversPoint = (countyId: Types.ObjectId, point: LngLat) =>
   County.exists({
     _id: countyId,
     isActive: true,
-    coversAreasGeoJSON: {
-      $geoIntersects: {
-        $geometry: { type: "Point", coordinates: point },
-      },
-    },
+    ...countyPointGeoFilter(point),
   });
 
 const billingClassFor = (county: PricingCounty, mobilityId?: string) => {
   if (!mobilityId || !county.mobilityBillingMap?.length) return undefined;
-  const row = county.mobilityBillingMap.find(
-    (item) => String(item.mobilityId) === String(mobilityId),
-  );
+  const row = county.mobilityBillingMap.find((item) => {
+    if (item.status === "disabled") return false;
+    return String(item.mobilityId) === String(mobilityId);
+  });
   return row?.billingClass;
 };
 
