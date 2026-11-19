@@ -11,7 +11,7 @@ type Ack = (payload: {
 
 type JoinedBooking = { userId: string; role: "USER" | "DRIVER" };
 
-const CLOSED_STATUSES = ["cancelled", "completed"];
+const CLOSED_STATUSES = ["cancelled", "completed", "no-show"];
 
 const roomOf = (bookingId: string) => `booking:${bookingId}`;
 

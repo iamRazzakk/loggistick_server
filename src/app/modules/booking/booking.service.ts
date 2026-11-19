@@ -44,7 +44,11 @@ import {
   buildPendingBookingFilter,
   buildTripHistoryFilter,
 } from "./booking.query";
-import { LOCKED_FARE_FIELDS } from "./booking.constant";
+import {
+  LOCKED_FARE_FIELDS,
+  NO_SHOW_FROM_STATUSES,
+  STAFF,
+} from "./booking.constant";
 import {
   getExportableTripColumns,
   TripHistoryBooking,
@@ -257,7 +261,7 @@ const getAllMyBookingsFromDB = async (
     Booking.find({
       ...mine,
       serviceDate: { $gte: format(new Date(), "yyyy-MM-dd") },
-      bookingStatus: { $nin: ["completed", "cancelled"] },
+      bookingStatus: { $nin: ["completed", "cancelled", "no-show"] },
     }),
     restQuery,
   )
@@ -480,6 +484,56 @@ const PRICING_INPUTS = [
   "countyId",
 ] as const;
 
+/**
+ * No-show (PDF §41): driver arrived, passenger did not appear.
+ * - Riders cannot mark it.
+ * - A driver can only mark their own trip, and only after tapping "arrived".
+ * - Staff (admin/dispatcher) can mark it without the arrival check.
+ * - Only before pickup (assigned / confirmed / in-progress), and a reason is required.
+ */
+const assertCanMarkNoShow = (
+  existing: IBooking,
+  payload: Partial<IBooking>,
+  user: JwtPayload,
+) => {
+  if (user.role === USER_ROLES.USER) {
+    throw new ApiError(
+      StatusCodes.FORBIDDEN,
+      "Riders cannot mark a trip as no-show.",
+    );
+  }
+  if (
+    !(NO_SHOW_FROM_STATUSES as readonly string[]).includes(
+      existing.bookingStatus,
+    )
+  ) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      `A ${existing.bookingStatus} trip cannot be marked as no-show.`,
+    );
+  }
+  if (user.role === USER_ROLES.DRIVER) {
+    if (String(existing.driverId) !== String(user.id)) {
+      throw new ApiError(
+        StatusCodes.FORBIDDEN,
+        "You are not the driver of this trip.",
+      );
+    }
+    if (!existing.driverArrivedAt) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "Mark yourself as arrived before marking the passenger as no-show.",
+      );
+    }
+  }
+  if (!payload.noShowReason?.trim()) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "A reason is required to mark a trip as no-show.",
+    );
+  }
+};
+
 const updateBookingInDB = async (
   id: string,
   payload: IBooking,
@@ -509,6 +563,28 @@ const updateBookingInDB = async (
   const existing = await Booking.findById(id);
   if (!existing) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
+  }
+
+  // Server-set no-show audit fields; clients may only send noShowReason.
+  delete payload.noShowAt;
+  delete payload.noShowBy;
+
+  // A no-show is closed: only staff may change it afterwards.
+  if (existing.bookingStatus === "no-show" && !STAFF.has(user.role)) {
+    throw new ApiError(
+      StatusCodes.FORBIDDEN,
+      "This trip is marked as no-show. Contact dispatch to change it.",
+    );
+  }
+
+  const isNoShow = payload.bookingStatus === "no-show";
+  if (isNoShow) {
+    assertCanMarkNoShow(existing, payload, user);
+    payload.noShowReason = payload.noShowReason?.trim();
+    payload.noShowAt = format(new Date(), "yyyy-MM-dd HH:mm:ss");
+    payload.noShowBy = new Types.ObjectId(user.id);
+  } else if (payload.bookingStatus !== undefined) {
+    delete payload.noShowReason;
   }
 
   if (payload.bookingStatus === "completed") {
@@ -569,9 +645,24 @@ const updateBookingInDB = async (
     }
   }
 
-  if (payload.bookingStatus === "cancelled") {
-    const outcome =
-      payload.cancellationOutcome ?? existing.cancellationOutcome ?? "both";
+  /**
+   * PREVIOUS IMPLEMENTATION
+   * No-show was only `bookingStatus: "cancelled"` + `isNoShow: true`, so it was
+   * saved as cancelled and could not be told apart in reports. That request
+   * still works; `bookingStatus: "no-show"` now uses the same charge rules and
+   * the funding source's noShow outcome.
+   */
+  if (payload.bookingStatus === "cancelled" || isNoShow) {
+    // Old clients: "cancelled" + isNoShow/noShow flag means a no-show charge.
+    const chargeAsNoShow =
+      isNoShow ||
+      Boolean(
+        (payload as { isNoShow?: boolean }).isNoShow ??
+          (payload as { noShow?: boolean }).noShow,
+      );
+    const outcome = chargeAsNoShow
+      ? (existing.noShowOutcome ?? "both")
+      : (payload.cancellationOutcome ?? existing.cancellationOutcome ?? "both");
 
     // FS share only — do not fall back to totalPrice (that is org + copay).
     let fundingSourceCharge =
@@ -590,11 +681,7 @@ const updateBookingInDB = async (
         .lean();
       const fees = county?.cancellationNoShow;
       if (fees) {
-        const isNoShow = Boolean(
-          (payload as { isNoShow?: boolean }).isNoShow ??
-            (payload as { noShow?: boolean }).noShow,
-        );
-        if (isNoShow) {
+        if (chargeAsNoShow) {
           if (fees.noShowPassenger != null) {
             passengerCopay = fees.noShowPassenger;
           }
@@ -636,7 +723,7 @@ const updateBookingInDB = async (
       adjusted.paymentStatus = "paid";
     }
     Object.assign(payload, adjusted);
-    payload.cancelledBy = new Types.ObjectId(user.id);
+    if (!isNoShow) payload.cancelledBy = new Types.ObjectId(user.id);
   }
 
   const booking = await Booking.findByIdAndUpdate(id, payload, { new: true });
@@ -667,8 +754,12 @@ const updateBookingInDB = async (
 
   await sendPushNotification({
     userIds: recipientIds,
-    title: `${userData?.firstName} ${userData?.lastName} ${booking.bookingStatus} your trip`,
-    body: `${booking.bookingStatus} your trip`,
+    title: isNoShow
+      ? "Trip marked as no-show"
+      : `${userData?.firstName} ${userData?.lastName} ${booking.bookingStatus} your trip`,
+    body: isNoShow
+      ? `Reason: ${booking.noShowReason ?? "Passenger did not show up"}`
+      : `${booking.bookingStatus} your trip`,
     data: {
       screen: "booking",
       referenceId: booking._id.toString(),

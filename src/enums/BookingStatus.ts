@@ -6,4 +6,5 @@ export type BookingStatus =
   | "cancelled"
   | "trip-completed"
   | "trip-started"
-  | "completed";
+  | "completed"
+  | "no-show";

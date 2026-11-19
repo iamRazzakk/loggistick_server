@@ -70,6 +70,9 @@ export type IBooking = {
   cancelledBy?: Types.ObjectId;
   driverArrivedAt?: string;
   driverPicupAt?: string;
+  noShowReason?: string;
+  noShowAt?: string;
+  noShowBy?: Types.ObjectId;
 };
 
 export type BookingModel = Model<IBooking>;

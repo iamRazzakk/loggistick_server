@@ -116,8 +116,11 @@ const bookingSchema = new Schema<IBooking, BookingModel>(
         "in-progress",
         "confirmed",
         "cancelled",
+        // Was missing here although validation allowed it, so updates failed.
+        "trip-started",
         "trip-completed",
         "completed",
+        "no-show",
       ],
       required: true,
       default: "pending",
@@ -194,6 +197,10 @@ const bookingSchema = new Schema<IBooking, BookingModel>(
       type: String,
       required: false,
     },
+    // No-show audit (PDF §41/§48): why, when, and who marked it.
+    noShowReason: { type: String, required: false },
+    noShowAt: { type: String, required: false },
+    noShowBy: { type: Schema.Types.ObjectId, ref: "User", required: false },
     driverPicupAt: {
       type: String,
       required: false,

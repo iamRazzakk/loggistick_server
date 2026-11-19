@@ -119,32 +119,32 @@ const getRecentActivityFromDB = async (user: JwtPayload) => {
 };
 
 const getDriverOverviewDataFromDB = async (user: JwtPayload) => {
-  const [totalTrips, totalCompletedTrips, totalEarningsAmount] =
-    await Promise.all([
-      Booking.countDocuments({
-        driverId: new Types.ObjectId(user.id),
-      }).lean(),
-      Booking.countDocuments({
-        driverId: new Types.ObjectId(user.id),
-        bookingStatus: "completed",
-      }).lean(),
-      Booking.find({
-        bookingStatus: "completed",
-        driverId: new Types.ObjectId(user.id),
-      })
-        .select("price organizationContribution passengerCoPay")
-        .lean(),
-    ]);
-  const totalEarnings =
-    totalEarningsAmount?.reduce(
-      (sum, row) =>
-        sum +
-        (row?.organizationContribution ??
-          row?.passengerCoPay ??
-          row?.price ??
-          0),
-      0,
-    ) ?? 0;
+  const driverId = new Types.ObjectId(user.id);
+  /**
+   * PREVIOUS IMPLEMENTATION
+   * 1) Took organizationContribution ?? passengerCoPay ?? price per trip.
+   * 2) Then summed totalPrice (org share + co-pay) of "completed" trips only.
+   * Both disagreed with the driver app, which lists finished trips
+   * ("trip-completed" and "completed") and shows the passenger co-pay per trip
+   * (e.g. 40 + 40 = 80, while the overview showed 200).
+   * Now: same trips and same amount as the driver trip list.
+   */
+  const finished = { $in: ["trip-completed", "completed"] };
+  const [totalTrips, totalCompletedTrips, earnings] = await Promise.all([
+    Booking.countDocuments({ driverId }),
+    Booking.countDocuments({ driverId, bookingStatus: finished }),
+    Booking.aggregate<{ total: number }>([
+      { $match: { driverId, bookingStatus: finished } },
+      {
+        $group: {
+          _id: null,
+          // Old bookings without passengerCoPay fall back to legacy `price`.
+          total: { $sum: { $ifNull: ["$passengerCoPay", "$price", 0] } },
+        },
+      },
+    ]),
+  ]);
+  const totalEarnings = Math.round((earnings[0]?.total ?? 0) * 100) / 100;
   return { totalTrips, totalCompletedTrips, totalEarnings };
 };
 
@@ -160,7 +160,7 @@ const getUserOnGoingBookingTodayFromDB = async (user: JwtPayload) => {
   const todays = await Booking.find({
     userId: new Types.ObjectId(user.id),
     serviceDate: today,
-    bookingStatus: { $nin: ["cancelled", "completed", "pending"] },
+    bookingStatus: { $nin: ["cancelled", "completed", "pending", "no-show"] },
     driverId: { $ne: null },
   })
     // Populate inside .lean() so driverId is a plain object. Booking.populate()
@@ -171,7 +171,8 @@ const getUserOnGoingBookingTodayFromDB = async (user: JwtPayload) => {
       select: "firstName lastName middleName profile contact",
     })
     .lean<(IBooking & { _id: Types.ObjectId })[]>();
-  const minutesOf = (time: string) => toMinutes(time) ?? Number.MAX_SAFE_INTEGER;
+  const minutesOf = (time: string) =>
+    toMinutes(time) ?? Number.MAX_SAFE_INTEGER;
   const [booking] = todays.sort(
     (a, b) => minutesOf(a.pickupTime) - minutesOf(b.pickupTime),
   );
@@ -222,7 +223,7 @@ const getDriverCurrentBookingFromDB = async (
     Booking.find({
       driverId: new Types.ObjectId(user.id),
       serviceDate: format(new Date(), "yyyy-MM-dd"),
-      bookingStatus: { $nin: ["cancelled", "completed"] },
+      bookingStatus: { $nin: ["cancelled", "completed", "no-show"] },
     }),
     query,
   )
@@ -262,7 +263,7 @@ const getDriverNextTripFromDB = async (user: JwtPayload) => {
   const bookings = await Booking.find({
     driverId: new Types.ObjectId(user.id),
     serviceDate: { $gte: format(new Date(), "yyyy-MM-dd") },
-    bookingStatus: { $nin: ["cancelled", "completed"] },
+    bookingStatus: { $nin: ["cancelled", "completed", "no-show"] },
     ...(currentId ? { _id: { $ne: currentId } } : {}),
   })
     .populate({
@@ -301,22 +302,27 @@ const getAllDriverTripsListFromDB = async (user: JwtPayload) => {
 // total Trip, completed trip, total paid
 
 const getUserTotalTripDetailsFromDB = async (user: JwtPayload) => {
-  const totalTrips = await Booking.countDocuments({
-    userId: new Types.ObjectId(user.id),
-  }).lean();
-  const totalCompletedTrips = await Booking.countDocuments({
-    userId: new Types.ObjectId(user.id),
-    bookingStatus: "completed",
-  }).lean();
-  // count total price of the trips
-  const totalPaid = await Booking.find({
-    userId: new Types.ObjectId(user.id),
-    bookingStatus: "completed",
-  })
-    .select("price")
-    .lean();
-  const totalPaidAmount =
-    totalPaid?.reduce((sum, row) => sum + (row.price ?? 0), 0) ?? 0;
+  const userId = new Types.ObjectId(user.id);
+  /**
+   * PREVIOUS IMPLEMENTATION
+   * Summed `price`, which no longer exists on bookings, so the total was 0.
+   * The rider only pays the passenger co-pay; the funding source pays the rest.
+   * Now sums passengerCoPay of bookings whose payment is actually "paid".
+   */
+  const [totalTrips, totalCompletedTrips, paid] = await Promise.all([
+    Booking.countDocuments({ userId }),
+    Booking.countDocuments({ userId, bookingStatus: "completed" }),
+    Booking.aggregate<{ total: number }>([
+      { $match: { userId, paymentStatus: "paid" } },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: { $ifNull: ["$passengerCoPay", 0] } },
+        },
+      },
+    ]),
+  ]);
+  const totalPaidAmount = Math.round((paid[0]?.total ?? 0) * 100) / 100;
   return { totalTrips, totalCompletedTrips, totalPaidAmount };
 };
 // overview data
@@ -332,6 +338,7 @@ const driverOverViewDataFromDB = async (user: JwtPayload) => {
       bookingStatus: "completed",
     }).lean(),
   ]);
+
 
   const totalRemainingTrips = todayTotalTrips - totalTodayCompleteTrips;
   return { todayTotalTrips, totalTodayCompleteTrips, totalRemainingTrips };

@@ -10,6 +10,15 @@ export const BOOKING_STATUSES = [
   "trip-started",
   "trip-completed",
   "completed",
+  // Driver arrived, passenger did not show up (PDF §41). Closed status.
+  "no-show",
+] as const;
+
+/** Statuses a booking may be in when it is marked no-show (passenger not picked up yet). */
+export const NO_SHOW_FROM_STATUSES = [
+  "assigned",
+  "confirmed",
+  "in-progress",
 ] as const;
 
 export const WEEKDAYS = [
@@ -48,9 +57,10 @@ export const NEXT_STATUS: Record<
 > = {
   pending: ["confirmed", "cancelled"],
   confirmed: ["assigned", "cancelled"],
-  assigned: ["completed", "cancelled"],
-  "in-progress": ["trip-completed", "cancelled"],
+  assigned: ["completed", "cancelled", "no-show"],
+  "in-progress": ["trip-completed", "cancelled", "no-show"],
   "trip-completed": ["completed", "cancelled"],
   completed: [],
   cancelled: [],
+  "no-show": [],
 };

@@ -64,6 +64,8 @@ const bookingBodySchema = z.object({
   driverId: checkValidID("Valid driverId is required").optional(),
 
   bookingStatus: z.enum(BOOKING_STATUSES).optional().default("pending"),
+  // Required by the service when bookingStatus is "no-show".
+  noShowReason: z.string().trim().min(1).max(500).optional(),
 
   recurringBatchId: z.string().optional(),
   price: z.number().optional().default(0),
