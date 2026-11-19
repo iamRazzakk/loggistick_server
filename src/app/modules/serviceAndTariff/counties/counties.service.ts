@@ -1,4 +1,5 @@
 import { StatusCodes } from "http-status-codes";
+import { Types } from "mongoose";
 import ApiError from "../../../../errors/ApiErrors";
 import { redisService } from "../../../../redis/redis.service";
 import { Payers } from "../payers/payers.model";
@@ -14,6 +15,7 @@ import {
   zonePricingFromPricingRules,
 } from "./counties.pricingRules.utils";
 import { getPriceFieldsToUnset } from "./counties.sanitizeByPriceMethod.utils";
+import { countyMergedRulesSchema } from "./counties.validation";
 
 const prepareCountyPayload = (payload: Partial<ICounty>): Partial<ICounty> => {
   const next = { ...payload };
@@ -36,6 +38,28 @@ const prepareCountyPayload = (payload: Partial<ICounty>): Partial<ICounty> => {
   return next;
 };
 
+/**
+ * Drop every cached county response for this county and its payer(s).
+ * List keys are versioned (`:v2`, `:v3`), so all versions are cleared — a missed
+ * version keeps serving a stale list for 24h.
+ */
+const LIST_CACHE_VERSIONS = ["", ":v2", ":v3"];
+
+const clearCountyCaches = async (
+  countyId: string,
+  payerIds: Array<unknown>,
+) => {
+  const keys = new Set<string>(["counties", `county:${countyId}`, `counties:${countyId}`]);
+  for (const v of LIST_CACHE_VERSIONS) keys.add(`counties:list${v}`);
+  for (const raw of payerIds) {
+    if (!raw) continue;
+    const payerId = String(raw);
+    keys.add(`counties:${payerId}`);
+    for (const v of LIST_CACHE_VERSIONS) keys.add(`counties:payer:${payerId}${v}`);
+  }
+  await Promise.all([...keys].map((key) => redisService.del(key)));
+};
+
 const createCountiesIntoDB = async (payload: ICounty) => {
   const payer = await Payers.findById(payload.payersId).lean();
   if (!payer) {
@@ -55,12 +79,7 @@ const createCountiesIntoDB = async (payload: ICounty) => {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to create county");
   }
 
-  await redisService.del("counties");
-  await redisService.del("counties:list");
-  await redisService.del("counties:list:v2");
-  await redisService.del(`counties:payer:${result.payersId.toString()}`);
-  await redisService.del(`counties:payer:${result.payersId.toString()}:v2`);
-  await redisService.del(`counties:${result._id.toString()}`);
+  await clearCountyCaches(result._id.toString(), [result.payersId]);
 
   await redisService.post({
     key: `county:${result._id.toString()}`,
@@ -71,28 +90,51 @@ const createCountiesIntoDB = async (payload: ICounty) => {
   return result;
 };
 
-const getAllCountiesFromDB = async (payersId?: string) => {
-  // v2: include contract `name` (Funding Source name) for admin list UI
-  const cacheKey = payersId
-    ? `counties:payer:${payersId}:v2`
-    : "counties:list:v2";
-  const cachedCounties = await redisService.get(cacheKey);
+/**
+ * `?fields=name,isActive` — inclusion-only projection for pickers.
+ * County docs carry full geofence geometry, so callers that only need a
+ * label must not pull the whole contract.
+ */
+const parseCountyFields = (fields?: string) =>
+  String(fields || "")
+    .split(",")
+    .map((field) => field.trim())
+    .filter((field) => /^[A-Za-z_][\w.]*$/.test(field));
+
+/** `?countyId=<id>` or `<id1>,<id2>` → valid ObjectIds (invalid ids are dropped). */
+const countyIdFilter = (countyId?: string) =>
+  String(countyId || "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter((id) => Types.ObjectId.isValid(id))
+    .map((id) => new Types.ObjectId(id));
+
+const getAllCountiesFromDB = async (countyId?: string, fields?: string) => {
+  const filter: Record<string, unknown> = { isActive: true };
+  const ids = countyIdFilter(countyId);
+  if (countyId && !ids.length) return [];
+  if (ids.length) filter._id = { $in: ids };
+
+  const selected = parseCountyFields(fields);
+  if (selected.length) {
+    return County.find(filter).select(selected.join(" ")).lean();
+  }
+
+  // v3: list cards only need names + fence count — never full geofence geometry.
+  // Only the full list is cached; a county-filtered list is read live.
+  const cacheKey = ids.length ? null : "counties:list:v3";
+  const cachedCounties = cacheKey ? await redisService.get(cacheKey) : null;
   if (cachedCounties) {
     return JSON.parse(cachedCounties);
   }
 
-  const filter: Record<string, unknown> = { isActive: true };
-  if (payersId) {
-    filter.payersId = payersId;
-  }
-
   const result = await County.find(filter)
     .select(
-      "_id name programName organizationType priceMethod isActive geofences fundingSourceId",
+      "_id name programName organizationType priceMethod isActive fundingSourceId geofences.name",
     )
     .lean();
 
-  if (result.length) {
+  if (cacheKey && result.length) {
     await redisService.post({
       key: cacheKey,
       value: JSON.stringify(result),
@@ -103,11 +145,17 @@ const getAllCountiesFromDB = async (payersId?: string) => {
   return result;
 };
 
-const getAllCountiesForAdmin = async (id: string) => {
-  const result = await County.find({ payersId: id })
-    .populate("payersId", "name type isActive")
-    .lean();
-  return result;
+/** Admin view of one county (active or not), looked up by county id. */
+const getAllCountiesForAdmin = async (id: string, fields?: string) => {
+  if (!Types.ObjectId.isValid(id)) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Valid county id is required");
+  }
+  const filter = { _id: new Types.ObjectId(id) };
+  const selected = parseCountyFields(fields);
+  if (selected.length) {
+    return County.find(filter).select(selected.join(" ")).lean();
+  }
+  return County.find(filter).lean();
 };
 
 const getSingleCountyFromDB = async (id: string) => {
@@ -118,7 +166,6 @@ const getSingleCountyFromDB = async (id: string) => {
   }
 
   const result = await County.findById(id)
-    .populate("payersId", "name type isActive")
     .lean();
 
   if (!result) {
@@ -134,8 +181,56 @@ const getSingleCountyFromDB = async (id: string) => {
   return result;
 };
 
+/** Fields whose change requires re-running the price/date rules. */
+const RULE_KEYS = new Set([
+  "priceMethod",
+  "flat_rate_price",
+  "mileage_based_price",
+  "mileage_brackets",
+  "initial_miles",
+  "initial_charge",
+  "additional_per_mile",
+  "zonePricing",
+  "pricingRules",
+  "effectiveFrom",
+  "effectiveTo",
+]);
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" &&
+  value !== null &&
+  !Array.isArray(value) &&
+  Object.getPrototypeOf(value) === Object.prototype;
+
+/**
+ * Merge `incoming` onto `stored` for plain nested objects (eligibility, programRules, …)
+ * so a partial edit keeps sibling fields. Arrays and primitives replace the stored value.
+ */
+const mergeNested = (stored: unknown, incoming: unknown): unknown => {
+  if (!isPlainObject(stored) || !isPlainObject(incoming)) return incoming;
+  const result: Record<string, unknown> = { ...stored };
+  for (const [key, value] of Object.entries(incoming)) {
+    if (value === undefined) continue;
+    result[key] = mergeNested(stored[key], value);
+  }
+  return result;
+};
+
+/** Only the keys the client sent, with nested objects merged onto the stored county. */
+const buildCountyUpdate = (
+  existing: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+) => {
+  const update: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(incoming)) {
+    if (value === undefined) continue;
+    update[key] = mergeNested(existing[key], value);
+  }
+  return update;
+};
+
 const updateCountiesFromDB = async (id: string, payload: Partial<ICounty>) => {
-  const existing = await County.findById(id).select("payersId").lean();
+  const existing = await County.findById(id).lean();
   if (!existing) {
     throw new ApiError(StatusCodes.NOT_FOUND, "County not found");
   }
@@ -147,32 +242,47 @@ const updateCountiesFromDB = async (id: string, payload: Partial<ICounty>) => {
     }
   }
 
-  const prepared = prepareCountyPayload(payload);
-  const updateQuery: Record<string, unknown> = { $set: prepared };
+  const stored = existing as unknown as Record<string, unknown>;
+  const update = buildCountyUpdate(
+    stored,
+    prepareCountyPayload(payload) as Record<string, unknown>,
+  );
 
-  if (prepared.priceMethod) {
-    updateQuery.$unset = getPriceFieldsToUnset(prepared.priceMethod);
+  if (!Object.keys(update).length) {
+    return County.findById(id);
   }
 
-  const result = await County.findByIdAndUpdate(id, updateQuery, {
-    new: true,
-    runValidators: true,
-  });
+  // Switching price method clears the other method's fields.
+  const unset = update.priceMethod
+    ? getPriceFieldsToUnset(update.priceMethod as ICounty["priceMethod"])
+    : {};
+  for (const key of Object.keys(update)) delete unset[key];
+
+  // Only re-check price/date rules when this edit touches them, so an old
+  // stored value never blocks editing an unrelated field.
+  if (Object.keys(update).some((key) => RULE_KEYS.has(key))) {
+    const merged: Record<string, unknown> = { ...stored, ...update };
+    for (const key of Object.keys(unset)) delete merged[key];
+    const check = countyMergedRulesSchema.safeParse(merged);
+    if (!check.success) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        check.error.issues.map((issue) => issue.message).join(". "),
+      );
+    }
+  }
+
+  const result = await County.findByIdAndUpdate(
+    id,
+    Object.keys(unset).length ? { ...update, $unset: unset } : update,
+    { new: true, runValidators: true },
+  );
 
   if (!result) {
     throw new ApiError(StatusCodes.NOT_FOUND, "County not found");
   }
 
-  await redisService.del("counties");
-  await redisService.del("counties:list");
-  await redisService.del("counties:list:v2");
-  await redisService.del(`county:${id}`);
-  await redisService.del(`counties:${id}`);
-  await redisService.del(`counties:payer:${existing.payersId.toString()}`);
-  await redisService.del(`counties:payer:${existing.payersId.toString()}:v2`);
-  await redisService.del(`counties:${existing.payersId.toString()}`);
-  await redisService.del(`counties:payer:${result.payersId.toString()}`);
-  await redisService.del(`counties:payer:${result.payersId.toString()}:v2`);
+  await clearCountyCaches(id, [existing?.payersId, result.payersId]);
 
   return result;
 };
@@ -190,16 +300,7 @@ const deleteCountiesFromDB = async (id: string) => {
     throw new ApiError(StatusCodes.NOT_FOUND, "County not found");
   }
 
-  await redisService.del("counties");
-  await redisService.del("counties:list");
-  await redisService.del("counties:list:v2");
-  await redisService.del(`county:${id}`);
-  await redisService.del(`counties:${id}`);
-  if (existing?.payersId) {
-    await redisService.del(`counties:payer:${existing.payersId.toString()}`);
-    await redisService.del(`counties:payer:${existing.payersId.toString()}:v2`);
-    await redisService.del(`counties:${existing.payersId.toString()}`);
-  }
+  await clearCountyCaches(id, [existing?.payersId]);
 
   return result;
 };
@@ -216,7 +317,6 @@ const findCountyByLocationFromDB = async (lng: number, lat: number) => {
     isActive: true,
     ...countyPointGeoFilter([lng, lat]),
   })
-    .populate("payersId", "name type isActive")
     .lean();
 
   return result;
@@ -238,18 +338,7 @@ const updateCountiesAdminFromDB = async (
     throw new ApiError(StatusCodes.NOT_FOUND, "County not found");
   }
 
-  await redisService.del("counties");
-  await redisService.del("counties:list");
-  await redisService.del("counties:list:v2");
-  await redisService.del(`county:${id}`);
-  await redisService.del(`counties:${id}`);
-  if (existing?.payersId) {
-    await redisService.del(`counties:payer:${existing.payersId.toString()}`);
-    await redisService.del(`counties:payer:${existing.payersId.toString()}:v2`);
-    await redisService.del(`counties:${existing.payersId.toString()}`);
-  }
-  await redisService.del(`counties:payer:${result.payersId.toString()}`);
-  await redisService.del(`counties:payer:${result.payersId.toString()}:v2`);
+  await clearCountyCaches(id, [existing?.payersId, result.payersId]);
 
   return result;
 };

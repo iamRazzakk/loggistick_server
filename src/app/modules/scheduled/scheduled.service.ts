@@ -1,21 +1,46 @@
 import { format } from "date-fns";
 import QueryBuilder from "../../builder/queryBuilder";
 import { Booking } from "../booking/booking.model";
+import { County } from "../serviceAndTariff/counties/counties.model";
+import { countyIdsFromQuery } from "../booking/booking.query";
+
+const escapeRegex = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const getAllBookingScheduledTodayFromDB = async (
   query: Record<string, any>,
 ) => {
-  const { date, serviceDate, ...restQuery } = query;
+  const { date, serviceDate, searchTerm, countyId, ...restQuery } = query;
   const targetDate =
     (date as string) ||
     (serviceDate as string) ||
     format(new Date(), "yyyy-MM-dd");
-  const qb = new QueryBuilder(
-    Booking.find({ serviceDate: targetDate }),
-    restQuery,
-  )
+
+  // Filter by county: ?countyId=<id>[,<id>] and/or ?searchTerm=<county name>.
+  const filter: Record<string, unknown> = { serviceDate: targetDate };
+  const countyIds = countyIdsFromQuery(countyId);
+  const term = String(searchTerm ?? "").trim();
+  if (term) {
+    const matched = await County.find({
+      $or: [
+        { name: { $regex: escapeRegex(term), $options: "i" } },
+        { programName: { $regex: escapeRegex(term), $options: "i" } },
+      ],
+    })
+      .select("_id")
+      .lean();
+    const byName = matched.map((county) => county._id);
+    filter.countyId = {
+      $in: countyIds.length
+        ? byName.filter((id) => countyIds.some((c) => c.equals(id)))
+        : byName,
+    };
+  } else if (countyIds.length) {
+    filter.countyId = { $in: countyIds };
+  }
+
+  const qb = new QueryBuilder(Booking.find(filter), restQuery)
     .filter()
-    .search(["payerSource"])
     .paginate()
     .populate(["userId", "driverId"], {
       userId: "firstName lastName middleName profile",

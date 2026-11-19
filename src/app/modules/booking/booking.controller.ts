@@ -157,7 +157,6 @@ const calculateTotalTripPrice = catchAsync(
     const pickup = req.body.pickup ?? req.body.pickupLocation;
     const dropoff = req.body.dropoff ?? req.body.dropOffLocation;
     const stop = req.body.stop ?? req.body.stopAddress;
-    const payerId = req.body.payerId ?? req.body.payerSource;
     const tripType = req.body.tripType ?? "one-way";
     const mobilityRequirements = req.body.mobilityRequirements;
     const countyId = req.body.countyId;
@@ -175,7 +174,6 @@ const calculateTotalTripPrice = catchAsync(
       pickup,
       dropoff,
       stop,
-      payerId,
       tripType,
       mobilityRequirements,
       countyId,

@@ -14,7 +14,8 @@ export type IBooking = {
   tripType: "one-way" | "round-trip";
   tripReason: AppointmentType;
   passengerSeats: number;
-  payerSource: Types.ObjectId;
+  /** Payer org for this trip (County.payersId / booking create). */
+  payerSource?: Types.ObjectId;
   programContext?: string;
   serviceDate: string;
   appointmentTime: string;
@@ -35,14 +36,22 @@ export type IBooking = {
   bookingStatus: BookingStatus;
   recurringBatchId?: string;
 
-  /** Passenger copay. This is the only amount the passenger pays. */
-  price?: number;
-
-  /** Funding-source charge. Hidden from the passenger role. */
-  totalPrice?: number;
+  /**
+   * Rider-facing copay only (what the passenger pays).
+   * Customer app shows this amount — not `totalPrice` / org share.
+   */
   passengerCoPay?: number;
 
-  /** Funding-source charge. Independent of passengerCoPay. Hidden from the passenger role. */
+  /**
+   * Full trip price for the booking (billable total).
+   * Prefer this name over legacy aliases when reading/writing fare totals.
+   */
+  totalPrice?: number;
+
+  /**
+   * Funding-source / county share of the trip (full FS charge; copay is not subtracted).
+   * Hidden from the passenger role. With `passengerCoPay`, makes up `totalPrice`.
+   */
   organizationContribution?: number;
   calculatedRouteMileage?: number | null;
   actualGpsMileage?: number | null;

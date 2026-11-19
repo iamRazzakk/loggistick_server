@@ -31,6 +31,7 @@ import {
   assertMaxMilesAfterQuote,
   companionChargeFor,
 } from "./booking.contractRules";
+import { toMoney } from "./pricing/tripPricing";
 import {
   notifyAdmins,
   sendNotifications,
@@ -112,7 +113,6 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
     stop: payload.stopAddress?.length
       ? (payload.stopAddress as [number, number])
       : undefined,
-    payerId: payload.payerSource?.toString(),
     countyId: bookingExtras.countyId?.toString(),
     userId: riderId,
     serviceDate: payload.serviceDate,
@@ -127,7 +127,6 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
     stop: payload.stopAddress?.length
       ? (payload.stopAddress as [number, number])
       : undefined,
-    payerId: payload.payerSource?.toString(),
     countyId: bookingExtras.countyId?.toString() ?? String(rules.county._id),
     userId: riderId,
     tripType: payload.tripType,
@@ -149,11 +148,19 @@ const createBookingIntoDB = async (user: JwtPayload, payload: IBooking) => {
     payload.passengerSeats,
   );
   if (companionFee > 0) {
-    quote.fundingSourceCharge += companionFee;
-    quote.totalPrice += companionFee;
-    quote.organizationContribution += companionFee;
+    quote.fundingSourceCharge = toMoney(
+      quote.fundingSourceCharge + companionFee,
+    );
+    quote.organizationContribution = quote.fundingSourceCharge;
+    quote.totalPrice = toMoney(
+      quote.organizationContribution + quote.passengerCoPay,
+    );
   }
   payload.countyId = rules.county._id;
+  // Store the payer on the booking itself so reads never need County.payersId.
+  if (!payload.payerSource && rules.county.payersId) {
+    payload.payerSource = new Types.ObjectId(String(rules.county.payersId));
+  }
   applyServerFare(payload, quote);
 
   const notifyAdminOfPendingBooking = async (referenceId: string) => {
@@ -300,8 +307,7 @@ const getAllBookingsFromDB = async (
   qb.modelQuery = qb.modelQuery.populate([
     {
       path: "countyId",
-      select: "payersId",
-      populate: { path: "payersId", select: "name type" },
+      select: "name programName",
     },
   ]);
 
@@ -335,10 +341,10 @@ const getAllApprovedBookingsFromDB = async (
     { path: "userId", select: "firstName lastName middleName profile" },
     { path: "mobilityRequirements", select: "name price icon" },
     { path: "driverId", select: "firstName lastName middleName" },
+    { path: "payerSource", select: "name type" },
     {
       path: "countyId",
-      select: "payersId",
-      populate: { path: "payersId", select: "name type" },
+      select: "name programName",
     },
   ]);
   const [data, meta] = await Promise.all([
@@ -371,6 +377,8 @@ const getTripHistoryFromDB = async (
     selectedFields: _selectedFields,
     columns: _columns,
     driverId: _driverId,
+    countyId: _countyId,
+    // Old payer filters are ignored (trips are filtered by county now).
     payerSource: _payerSource,
     payerId: _payerId,
     unassign,
@@ -402,8 +410,7 @@ const getTripHistoryFromDB = async (
   qb.modelQuery.populate([
     {
       path: "countyId",
-      select: "payersId",
-      populate: { path: "payersId", select: "name type" },
+      select: "name programName",
     },
   ]);
 
@@ -435,8 +442,7 @@ export const buildTripHistoryFile = async (
       { path: "payerSource", select: "name type" },
       {
         path: "countyId",
-        select: "payersId",
-        populate: { path: "payersId", select: "name type" },
+        select: "name programName",
       },
     ])
     .lean();
@@ -469,7 +475,6 @@ const PRICING_INPUTS = [
   "stopAddress",
   "tripType",
   "mobilityRequirements",
-  "payerSource",
   "serviceDate",
   "actualGpsMileage",
   "countyId",
@@ -546,7 +551,6 @@ const updateBookingInDB = async (
       stop: merged.stopAddress?.length
         ? (merged.stopAddress as [number, number])
         : undefined,
-      payerId: merged.payerSource?.toString(),
       countyId: (
         merged as IBooking & { countyId?: string }
       ).countyId?.toString(),
@@ -569,10 +573,10 @@ const updateBookingInDB = async (
     const outcome =
       payload.cancellationOutcome ?? existing.cancellationOutcome ?? "both";
 
+    // FS share only — do not fall back to totalPrice (that is org + copay).
     let fundingSourceCharge =
       payload.organizationContribution ??
       existing.organizationContribution ??
-      existing.totalPrice ??
       0;
     let passengerCopay =
       payload.passengerCoPay ?? existing.passengerCoPay ?? 0;
@@ -772,7 +776,6 @@ const calculateTotalTripPrice = async (
   pickupLocation: [number, number],
   dropoffLocation: [number, number],
   stopAddress?: [number, number],
-  payerId?: string,
   tripType: "one-way" | "round-trip" = "one-way",
   mobilityRequirements?: string,
   countyId?: string,
@@ -788,7 +791,6 @@ const calculateTotalTripPrice = async (
     pickup: pickupLocation,
     dropoff: dropoffLocation,
     stop: stopAddress,
-    payerId,
     countyId,
     userId,
     serviceDate,
@@ -801,7 +803,6 @@ const calculateTotalTripPrice = async (
     pickup: pickupLocation,
     dropoff: dropoffLocation,
     stop: stopAddress,
-    payerId,
     countyId: countyId ?? String(rules.county._id),
     userId,
     tripType,
@@ -820,9 +821,13 @@ const calculateTotalTripPrice = async (
   });
   const companionFee = companionChargeFor(rules.county, passengerSeats);
   if (companionFee > 0) {
-    quote.fundingSourceCharge += companionFee;
-    quote.totalPrice += companionFee;
-    quote.organizationContribution += companionFee;
+    quote.fundingSourceCharge = toMoney(
+      quote.fundingSourceCharge + companionFee,
+    );
+    quote.organizationContribution = quote.fundingSourceCharge;
+    quote.totalPrice = toMoney(
+      quote.organizationContribution + quote.passengerCoPay,
+    );
   }
   return quote;
 };

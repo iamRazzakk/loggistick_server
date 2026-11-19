@@ -51,7 +51,7 @@ router
 // Trip History page (Show Map + Export toolbar)
 // Shared optional query for list, map, and file:
 //   startDate, endDate = yyyy-MM-dd on booking.serviceDate
-//   payerId | payerSource = Payers._id via County.payersId → booking.countyId
+//   countyId = County._id (single id or comma list) → booking.countyId
 //   searchTerm, driverId, unassign, sort, page, limit
 const tripHistoryAuth = [
   auth(

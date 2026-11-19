@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AppointmentType } from "../../../../enums/AppointmentType";
 import { checkValidID } from "../../../../shared/checkValidID";
 import { bracketError } from "../../booking/pricing/tripPricing";
 
@@ -84,8 +85,18 @@ const geofenceSchema = z.object({
   isActive: z.boolean().optional().default(true),
 });
 
+const TRIP_REASON_NAMES = Object.values(AppointmentType) as [
+  AppointmentType,
+  ...AppointmentType[],
+];
+
 const tripReasonSchema = z.object({
-  name: z.string().min(1, "Trip reason name is required"),
+  // Must match a booking trip reason, otherwise riders could never book it.
+  name: z.enum(TRIP_REASON_NAMES, {
+    errorMap: (_issue, ctx) => ({
+      message: `Trip reason "${String(ctx.data)}" is not valid. Use one of: ${TRIP_REASON_NAMES.join(", ")}`,
+    }),
+  }),
   inside: z.enum(["allowed", "blocked"]).default("allowed"),
   outside: z.enum(["allowed", "blocked"]).default("allowed"),
   maxMiles: z.coerce.number().min(0).nullable().optional(),
@@ -303,21 +314,11 @@ const addRateCardIssues = (
   }
 };
 
-const priceMethodRefine = (
-  data: z.infer<typeof countyBodyBaseSchema>,
+/** Price / date rules. Runs on create, and on update after merging with the stored county. */
+export const countyRulesRefine = (
+  data: Partial<z.infer<typeof countyBodyBaseSchema>>,
   ctx: z.RefinementCtx,
 ) => {
-  const hasGeofences = Boolean(data.geofences?.length);
-  const hasLegacyGeo = Boolean(data.coversAreasGeoJSON);
-  if (!hasGeofences && !hasLegacyGeo) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["geofences"],
-      message:
-        "At least one geofence is required (upload JSON FeatureCollection or provide geofences[])",
-    });
-  }
-
   addRateCardIssues(data, ctx, []);
   if (data.mileage_brackets?.length) {
     const problem = bracketError(data.mileage_brackets);
@@ -355,22 +356,49 @@ const priceMethodRefine = (
   }
 };
 
+const createRefine = (
+  data: z.infer<typeof countyBodyBaseSchema>,
+  ctx: z.RefinementCtx,
+) => {
+  const hasGeofences = Boolean(data.geofences?.length);
+  const hasLegacyGeo = Boolean(data.coversAreasGeoJSON);
+  if (!hasGeofences && !hasLegacyGeo) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["geofences"],
+      message:
+        "At least one geofence is required (upload JSON FeatureCollection or provide geofences[])",
+    });
+  }
+  countyRulesRefine(data, ctx);
+};
+
+/** Used by the update service on the merged (stored + incoming) county. */
+export const countyMergedRulesSchema = z
+  .custom<Partial<z.infer<typeof countyBodyBaseSchema>>>(
+    (value) => typeof value === "object" && value !== null,
+  )
+  .superRefine((data, ctx) => countyRulesRefine(data, ctx));
+
 const createCountyZodSchema = z.object({
-  body: countyBodyBaseSchema.superRefine(priceMethodRefine),
+  body: countyBodyBaseSchema.superRefine(createRefine),
 });
 
+/**
+ * Partial update: every field (including nested ones) is optional.
+ * Cross-field price/date rules run in the service after merging with the stored county,
+ * so the client only has to send the fields it wants to change.
+ */
+const partialZoneRateCardSchema = zoneRateCardSchema.partial();
+
 const updateCountyZodSchema = z.object({
-  body: countyBodyBaseSchema.partial().superRefine((data, ctx) => {
-    if (
-      data.priceMethod ||
-      data.zonePricing ||
-      data.mileage_brackets ||
-      data.pricingRules
-    ) {
-      if (data.priceMethod) {
-        priceMethodRefine(data as z.infer<typeof countyBodyBaseSchema>, ctx);
-      }
-    }
+  body: countyBodyBaseSchema.partial().extend({
+    zonePricing: z
+      .object({
+        inside: partialZoneRateCardSchema.optional(),
+        outside: partialZoneRateCardSchema.optional(),
+      })
+      .optional(),
   }),
 });
 

@@ -5,7 +5,6 @@ import { displayName, joinList } from "../../../util/formatText";
 
 type NamedPerson = { firstName?: string; lastName?: string } | null;
 type NamedRecord = { name?: string; type?: string } | null;
-type CountyPayer = { payersId?: NamedRecord | null } | null;
 
 export type TripHistoryBooking = {
   _id: unknown;
@@ -32,7 +31,7 @@ export type TripHistoryBooking = {
   tripNote?: string;
   internalPrivateNote?: string;
   programContext?: string;
-  countyId?: CountyPayer | unknown;
+  countyId?: unknown;
   totalPrice?: number;
   calculatedRouteMileage?: number | null;
   actualGpsMileage?: number | null;
@@ -64,19 +63,10 @@ const localIso = (value?: Date | string) =>
 const dayList = (value?: string | string[]) =>
   joinList(Array.isArray(value) ? value : value ? [value] : []);
 
-const fundingSource = (booking: TripHistoryBooking): NamedRecord => {
-  if (booking.payerSource?.name || booking.payerSource?.type) {
-    return booking.payerSource;
-  }
-  const county =
-    booking.countyId &&
-    typeof booking.countyId === "object" &&
-    booking.countyId !== null
-      ? (booking.countyId as CountyPayer)
-      : null;
-  const payer = county && typeof county === "object" ? county.payersId : null;
-  return payer && typeof payer === "object" ? payer : null;
-};
+const fundingSource = (booking: TripHistoryBooking): NamedRecord =>
+  booking.payerSource?.name || booking.payerSource?.type
+    ? booking.payerSource
+    : null;
 
 const COLUMNS: TripColumn[] = [
   {

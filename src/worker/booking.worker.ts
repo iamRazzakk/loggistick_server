@@ -52,6 +52,9 @@ const createRecurringBookings = async (job: Job) => {
       payerSource: payload.payerSource
         ? new Types.ObjectId(payload.payerSource)
         : undefined,
+      countyId: payload.countyId
+        ? new Types.ObjectId(String(payload.countyId))
+        : undefined,
       driverId: payload.driverId
         ? new Types.ObjectId(payload.driverId)
         : undefined,

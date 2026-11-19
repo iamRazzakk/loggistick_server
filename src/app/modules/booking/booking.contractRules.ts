@@ -14,7 +14,6 @@ export type ContractRuleInput = {
   pickup: LngLat;
   dropoff: LngLat;
   stop?: LngLat;
-  payerId?: string;
   countyId?: string;
   userId?: string;
   serviceDate?: string;
@@ -73,9 +72,6 @@ const loadCounty = async (input: ContractRuleInput) => {
     isActive: true,
     ...countyPointGeoFilter(input.pickup),
   };
-  if (input.payerId && Types.ObjectId.isValid(input.payerId)) {
-    filter.payersId = new Types.ObjectId(input.payerId);
-  }
   const county = await County.findOne(filter)
     .sort({ effectiveFrom: -1 })
     .lean<({ _id: Types.ObjectId } & ICounty) | null>();

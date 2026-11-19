@@ -23,7 +23,6 @@ export const WEEKDAYS = [
 ] as const;
 
 export const LOCKED_FARE_FIELDS = [
-  "price",
   "totalPrice",
   "passengerCoPay",
   "organizationContribution",

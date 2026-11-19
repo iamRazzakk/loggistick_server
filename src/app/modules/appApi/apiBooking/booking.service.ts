@@ -151,54 +151,32 @@ const getDriverOverviewDataFromDB = async (user: JwtPayload) => {
 // user on going booking
 const getUserOnGoingBookingTodayFromDB = async (user: JwtPayload) => {
   const today = format(new Date(), "yyyy-MM-dd");
-  const [booking] = await Booking.aggregate<IBooking & { _id: Types.ObjectId }>(
-    [
-      {
-        $match: {
-          userId: new Types.ObjectId(user.id),
-          serviceDate: today,
-          bookingStatus: { $nin: ["cancelled", "completed", "pending"] },
-          driverId: { $ne: null },
-        },
-      },
-      {
-        $set: {
-          pickupMinutes: {
-            $add: [
-              {
-                $multiply: [
-                  {
-                    $mod: [
-                      { $toInt: { $substrBytes: ["$pickupTime", 0, 2] } },
-                      12,
-                    ],
-                  },
-                  60,
-                ],
-              },
-              { $toInt: { $substrBytes: ["$pickupTime", 3, 2] } },
-              {
-                $cond: [
-                  { $eq: [{ $substrBytes: ["$pickupTime", 6, 2] }, "PM"] },
-                  720,
-                  0,
-                ],
-              },
-            ],
-          },
-        },
-      },
-      { $sort: { pickupMinutes: 1 } },
-      { $limit: 1 },
-      { $unset: "pickupMinutes" },
-    ],
+  /**
+   * PREVIOUS IMPLEMENTATION
+   * Sorted in an aggregation by slicing pickupTime at fixed positions
+   * ("hh:mm AM"). A one-digit hour like "2:06 PM" gave "2:" and $toInt threw,
+   * so the endpoint returned 500. Now uses the same parser as validation.
+   */
+  const todays = await Booking.find({
+    userId: new Types.ObjectId(user.id),
+    serviceDate: today,
+    bookingStatus: { $nin: ["cancelled", "completed", "pending"] },
+    driverId: { $ne: null },
+  })
+    // Populate inside .lean() so driverId is a plain object. Booking.populate()
+    // on a lean result returned a full Mongoose document, and spreading it
+    // leaked "$__" / "_doc" internals into the response.
+    .populate({
+      path: "driverId",
+      select: "firstName lastName middleName profile contact",
+    })
+    .lean<(IBooking & { _id: Types.ObjectId })[]>();
+  const minutesOf = (time: string) => toMinutes(time) ?? Number.MAX_SAFE_INTEGER;
+  const [booking] = todays.sort(
+    (a, b) => minutesOf(a.pickupTime) - minutesOf(b.pickupTime),
   );
 
   if (!booking) return [];
-  await Booking.populate(booking, {
-    path: "driverId",
-    select: "firstName lastName middleName profile contact",
-  });
 
   const driverId = (
     booking.driverId as unknown as { _id?: Types.ObjectId } | null

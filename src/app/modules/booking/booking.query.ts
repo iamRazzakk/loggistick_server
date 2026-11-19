@@ -2,10 +2,19 @@ import { Types } from "mongoose";
 import { StatusCodes } from "http-status-codes";
 import ApiError from "../../../errors/ApiErrors";
 import { User } from "../user/user.model";
-import { County } from "../serviceAndTariff/counties/counties.model";
 import { format } from "date-fns";
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Valid county ids from `?countyId=` (single, comma list or array). */
+export const countyIdsFromQuery = (value: unknown): Types.ObjectId[] => {
+  if (value === undefined || value === null || value === "") return [];
+  const raw = Array.isArray(value) ? value : String(value).split(",");
+  return raw
+    .map((id) => String(id).trim())
+    .filter((id) => id && id !== "all" && Types.ObjectId.isValid(id))
+    .map((id) => new Types.ObjectId(id));
+};
 
 const escapeRegex = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -83,15 +92,10 @@ export const buildTripHistoryFilter = async (query: Record<string, any>) => {
     filter.driverId = new Types.ObjectId(driverId);
   }
 
-  const payerId = String(query.payerSource ?? query.payerId ?? "").trim();
-  if (payerId && Types.ObjectId.isValid(payerId)) {
-    const counties = await County.find({
-      payersId: new Types.ObjectId(payerId),
-    })
-      .select("_id")
-      .lean();
-    filter.countyId = { $in: counties.map((county) => county._id) };
-  }
+  // ?countyId=<id> or ?countyId=<id1>,<id2> — filter trips by county.
+  const countyIds = countyIdsFromQuery(query.countyId);
+  if (countyIds.length === 1) filter.countyId = countyIds[0];
+  else if (countyIds.length > 1) filter.countyId = { $in: countyIds };
 
   const selectedDateObj =
     typeof query.selectedDate === "object" &&

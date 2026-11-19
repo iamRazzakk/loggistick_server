@@ -127,12 +127,6 @@ const bookingSchema = new Schema<IBooking, BookingModel>(
       required: false,
       index: true,
     },
-
-    price: {
-      type: Number,
-      required: false,
-      default: 0,
-    },
     isApproved: {
       type: String,
       enum: ["pending", "approved", "rejected"],
@@ -158,17 +152,24 @@ const bookingSchema = new Schema<IBooking, BookingModel>(
       ref: "County",
       required: false,
     },
-    organizationContribution: {
-      type: Number,
-      required: false,
-      default: 0,
-    },
+    // Fare — keep in sync with IBooking (passengerCoPay / totalPrice / organizationContribution)
+    /** Rider-facing copay only (what the passenger pays). */
     passengerCoPay: {
       type: Number,
       required: false,
       default: 0,
     },
+    /** Full trip price for the booking (billable total). */
     totalPrice: {
+      type: Number,
+      required: false,
+      default: 0,
+    },
+    /**
+     * Funding-source / county share (full FS charge; copay is not subtracted).
+     * With passengerCoPay, makes up totalPrice.
+     */
+    organizationContribution: {
       type: Number,
       required: false,
       default: 0,

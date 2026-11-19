@@ -122,11 +122,7 @@ const getAllRidersFromDB = async (
     .paginate();
   qb.modelQuery = qb.modelQuery.populate({
     path: "county",
-    select: "payersId",
-    populate: {
-      path: "payersId",
-      select: "name type isActive",
-    },
+    select: "name programName",
   });
 
   const [data, meta] = await Promise.all([

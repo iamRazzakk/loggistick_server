@@ -165,19 +165,12 @@ const effectiveFilter = (serviceDay: string) => ({
   ],
 });
 
-const findCountyForPoint = (
-  point: LngLat,
-  payerId: string | undefined,
-  serviceDay: string,
-) => {
+const findCountyForPoint = (point: LngLat, serviceDay: string) => {
   const filter: Record<string, unknown> = {
     isActive: true,
     ...effectiveFilter(serviceDay),
     ...countyPointGeoFilter(point),
   };
-  if (payerId && Types.ObjectId.isValid(payerId)) {
-    filter.payersId = new Types.ObjectId(payerId);
-  }
   return County.findOne(filter)
     .sort({ effectiveFrom: -1 })
     .lean<PricingCounty>();
@@ -196,7 +189,6 @@ const loadActiveCounty = (countyId: string) =>
  */
 const resolvePickupCounty = async (input: {
   pickup: LngLat;
-  payerId?: string;
   countyId?: string;
   userId?: string;
   serviceDate?: string;
@@ -229,7 +221,7 @@ const resolvePickupCounty = async (input: {
     return county;
   }
 
-  return findCountyForPoint(input.pickup, input.payerId, serviceDay);
+  return findCountyForPoint(input.pickup, serviceDay);
 };
 
 const countyCoversPoint = (countyId: Types.ObjectId, point: LngLat) =>
@@ -305,7 +297,6 @@ export const getTripPrice = async (input: {
   pickup: LngLat;
   dropoff: LngLat;
   stop?: LngLat;
-  payerId?: string;
   countyId?: string;
   userId?: string;
   tripType: "one-way" | "round-trip";
@@ -430,11 +421,13 @@ export const getTripPrice = async (input: {
     ? routeValues.reduce<number>((sum, value) => sum + (value ?? 0), 0)
     : null;
 
+  // MD / IBooking: org = FS charge; totalPrice = org + copay (copay not subtracted from FS)
+  const organizationContribution = fundingSourceCharge;
   return {
-    totalPrice: fundingSourceCharge,
-    passengerCoPay,
-    organizationContribution: fundingSourceCharge,
     fundingSourceCharge,
+    organizationContribution,
+    passengerCoPay,
+    totalPrice: toMoney(organizationContribution + passengerCoPay),
     milesPrice: Number(
       legs.reduce((sum, leg) => sum + leg.billingMileage, 0).toFixed(2),
     ),
@@ -653,11 +646,16 @@ export const applyServerFare = (
   payload: Partial<IBooking>,
   quote: TripQuote,
 ) => {
-  payload.totalPrice = quote.fundingSourceCharge;
-  payload.passengerCoPay = quote.passengerCoPay;
-  payload.organizationContribution = quote.fundingSourceCharge;
-  payload.price = quote.passengerCoPay;
-  payload.paymentStatus = quote.passengerCoPay <= 0 ? "paid" : "pending";
+  // Persist MD-aligned money fields:
+  // organizationContribution = FS charge (copay is NOT subtracted from it)
+  // passengerCoPay = rider copay
+  // totalPrice = org share + copay
+  const organizationContribution = toMoney(quote.fundingSourceCharge);
+  const passengerCoPay = toMoney(quote.passengerCoPay);
+  payload.organizationContribution = organizationContribution;
+  payload.passengerCoPay = passengerCoPay;
+  payload.totalPrice = toMoney(organizationContribution + passengerCoPay);
+  payload.paymentStatus = passengerCoPay <= 0 ? "paid" : "pending";
   payload.calculatedRouteMileage = quote.calculatedRouteMileage;
   payload.actualGpsMileage = quote.actualGpsMileage;
   payload.straightLineMileage = quote.straightLineMileage;
@@ -679,13 +677,12 @@ export const fareAfterChargeOutcome = (
     passengerCopay,
     outcome,
   );
+  const organizationContribution = toMoney(applied.fundingSourceCharge);
+  const copay = toMoney(applied.passengerCopay);
   return {
-    totalPrice: toMoney(applied.fundingSourceCharge),
-    organizationContribution: toMoney(applied.fundingSourceCharge),
-    passengerCoPay: toMoney(applied.passengerCopay),
-    price: toMoney(applied.passengerCopay),
-    paymentStatus: (applied.passengerCopay <= 0 ? "paid" : "pending") as
-      | "paid"
-      | "pending",
+    organizationContribution,
+    passengerCoPay: copay,
+    totalPrice: toMoney(organizationContribution + copay),
+    paymentStatus: (copay <= 0 ? "paid" : "pending") as "paid" | "pending",
   };
 };

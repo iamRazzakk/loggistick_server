@@ -15,9 +15,11 @@ const createCounties = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getAllCounties = catchAsync(async (req: Request, res: Response) => {
-  const payersId =
-    typeof req.query.payersId === "string" ? req.query.payersId : undefined;
-  const result = await CountiesService.getAllCountiesFromDB(payersId);
+  const countyId =
+    typeof req.query.countyId === "string" ? req.query.countyId : undefined;
+  const fields =
+    typeof req.query.fields === "string" ? req.query.fields : undefined;
+  const result = await CountiesService.getAllCountiesFromDB(countyId, fields);
   sendResponse(res, {
     statusCode: StatusCodes.OK,
     success: true,
@@ -27,7 +29,12 @@ const getAllCounties = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getAllCountiesAdmin = catchAsync(async (req: Request, res: Response) => {
-  const result = await CountiesService.getAllCountiesForAdmin(req.params.id);
+  const fields =
+    typeof req.query.fields === "string" ? req.query.fields : undefined;
+  const result = await CountiesService.getAllCountiesForAdmin(
+    req.params.id,
+    fields,
+  );
   sendResponse(res, {
     statusCode: StatusCodes.OK,
     success: true,
