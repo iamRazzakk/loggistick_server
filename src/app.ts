@@ -10,6 +10,7 @@ import helmet from "helmet";
 import { apiLimiter } from "./services/rate-limiter";
 import router from "./app/routes";
 import sanitizeMongo from "./app/middlewares/sanitizeMongo";
+import sanitizeInput from "./app/middlewares/sanitizeInput";
 import handleStripeWebhook from "./helpers/handleStripeWebhook";
 const app = express();
 
@@ -45,6 +46,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 // Strip MongoDB operators ($ne, $set, …) from body/query (NoSQL injection)
 app.use(sanitizeMongo);
+// Strip injected scripts (<script>, onerror=, javascript:) from text input
+app.use(sanitizeInput);
 
 //file retrieve
 app.use(express.static("uploads"));

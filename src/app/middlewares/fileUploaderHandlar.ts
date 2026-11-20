@@ -1,5 +1,11 @@
 import { NextFunction, Request, Response } from "express";
 import { stripMongoOperators } from "./sanitizeMongo";
+import { stripDangerousHtml } from "./sanitizeInput";
+import {
+  deleteUploadedFiles,
+  scanUploadedFiles,
+} from "../../helpers/fileSecurity";
+import { errorLogger } from "../../shared/logger";
 import fs from "fs";
 import path from "path";
 import multer, { FileFilterCallback } from "multer";
@@ -193,11 +199,27 @@ export const getUploadFields = (fields?: IUploadField[]) => {
       maxCount: UPLOAD_CONFIG[field].maxCount,
     })),
   );
-  // multer builds req.body from form fields (e.g. "a[$ne]") → strip operators
   return (req: Request, res: Response, next: NextFunction) =>
-    handler(req, res, (err?: unknown) => {
-      if (err) return next(err);
-      req.body = stripMongoOperators(req.body ?? {});
+    handler(req, res, async (err?: unknown) => {
+      if (err) {
+        // multer error (size, type…) → don't keep partial files
+        await deleteUploadedFiles(req.files as never);
+        return next(err);
+      }
+      // Malware check: real file type, no executables/scripts/macros,
+      // optional ClamAV. Unsafe → every file of this request is deleted.
+      try {
+        await scanUploadedFiles(req.files as never);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : "Unsafe file";
+        errorLogger.warn(
+          `Blocked unsafe upload from ${req.ip} (user ${req.user?.id ?? "anonymous"}): ${reason}`,
+        );
+        return next(new ApiError(StatusCodes.BAD_REQUEST, `File rejected — ${reason}`));
+      }
+      // multer builds req.body from form fields (e.g. "a[$ne]") → strip
+      // Mongo operators and injected scripts
+      req.body = stripDangerousHtml(stripMongoOperators(req.body ?? {}));
       next();
     });
 };

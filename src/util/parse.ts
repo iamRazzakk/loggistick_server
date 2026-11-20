@@ -1,6 +1,7 @@
 import { StatusCodes } from "http-status-codes";
 import ApiError from "../errors/ApiErrors";
 import { stripMongoOperators } from "../app/middlewares/sanitizeMongo";
+import { stripDangerousHtml } from "../app/middlewares/sanitizeInput";
 
 const parseValue = (value: unknown) => {
   if (typeof value !== "string") return value;
@@ -37,7 +38,9 @@ export const parseBody = <T = Record<string, unknown>>(
       const parsed = JSON.parse(data.data);
       const { data: _, ...rest } = data;
       // JSON from the client may carry Mongo operators → strip them
-      return stripMongoOperators({ ...parsed, ...rest }) as T;
+      return stripDangerousHtml(
+        stripMongoOperators({ ...parsed, ...rest }),
+      ) as T;
     } catch {
       throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to parse body data");
     }
@@ -46,5 +49,5 @@ export const parseBody = <T = Record<string, unknown>>(
   for (const [key, value] of Object.entries(data)) {
     result[key] = parseValue(value);
   }
-  return stripMongoOperators(result) as T;
+  return stripDangerousHtml(stripMongoOperators(result)) as T;
 };
