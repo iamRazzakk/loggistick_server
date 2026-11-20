@@ -22,7 +22,17 @@ const getChatFromDB = async (user: any, search: string): Promise<IChat[]> => {
       select: "_id firstName lastName middleName profile",
       match: {
         _id: { $ne: user.id }, // Exclude user.id in the populated participants
-        ...(search && { name: { $regex: search, $options: "i" } }), // Apply $regex only if search is valid
+        // search is matched literally (escaped) — no regex injection / ReDoS
+        ...(typeof search === "string" &&
+          search.trim() && {
+            name: {
+              $regex: search
+                .trim()
+                .slice(0, 100)
+                .replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+              $options: "i",
+            },
+          }),
       },
     })
     .select("participants status");

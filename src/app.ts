@@ -9,6 +9,7 @@ import session from "express-session";
 import helmet from "helmet";
 import { apiLimiter } from "./services/rate-limiter";
 import router from "./app/routes";
+import sanitizeMongo from "./app/middlewares/sanitizeMongo";
 import handleStripeWebhook from "./helpers/handleStripeWebhook";
 const app = express();
 
@@ -24,16 +25,26 @@ app.use(Morgan.successHandler);
 app.use(Morgan.errorHandler);
 app.disable("x-powered-by");
 app.use(helmet());
+// CORS: CORS_ORIGINS="https://admin.example.com,https://app.example.com"
+// → only those sites may call the API with cookies. If it is not set, any
+// site may call the API but browsers won't send cookies (Bearer still works;
+// mobile apps are not affected by CORS).
+const corsOrigins = (process.env.CORS_ORIGINS ?? "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 app.use(
-  cors({
-    origin: true,
-
-    credentials: true,
-  }),
+  cors(
+    corsOrigins.length
+      ? { origin: corsOrigins, credentials: true }
+      : { origin: true, credentials: false },
+  ),
 );
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+// Strip MongoDB operators ($ne, $set, …) from body/query (NoSQL injection)
+app.use(sanitizeMongo);
 
 //file retrieve
 app.use(express.static("uploads"));

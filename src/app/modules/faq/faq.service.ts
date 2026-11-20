@@ -12,7 +12,7 @@ const createFaqIntoDB = async (payload: IFaq) => {
 };
 
 const getAllFaqsFromDB = async (role?: TFaqRole) => {
-  const filter = role ? { role } : {};
+  const filter = role ? { role: String(role) } : {};
   const result = await Faq.find(filter).lean();
   if (!result) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to get FAQs");

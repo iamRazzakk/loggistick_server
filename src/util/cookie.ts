@@ -1,10 +1,10 @@
 import { type CookieOptions, type Response } from "express";
 import cryptoToken from "./cryptoToken";
-import { jwtHelpers } from "../helpers/jwtHelper";
 
 export const AUTH_COOKIE_ACCESS = "access_token";
 export const AUTH_COOKIE_REFRESH = "refresh_token";
-const CSRF_COOKIE = "csrf_token";
+export const AUTH_COOKIE_CSRF = "csrf_token";
+const CSRF_COOKIE = AUTH_COOKIE_CSRF;
 
 const COOKIE_SECURE = process.env.COOKIE_SECURE === "true";
 const COOKIE_SAME_SITE: CookieOptions["sameSite"] =
@@ -34,9 +34,13 @@ function createCsrfCookieOptions(maxAge: number): CookieOptions {
   };
 }
 
-export function setAuthCookies(res: Response, userId: string, role: string) {
-  const accessToken = jwtHelpers.createAccessToken({ id: userId, role: role });
-  const refreshToken = jwtHelpers.createRefreshToken(userId);
+// Stores the tokens the service already issued (so cookies and the JSON body
+// carry the same tokens, including the user's tokenVersion).
+export function setAuthCookies(
+  res: Response,
+  accessToken: string,
+  refreshToken: string,
+) {
   const csrfToken = cryptoToken();
 
   const accessMaxAge = 15 * 60 * 1000;

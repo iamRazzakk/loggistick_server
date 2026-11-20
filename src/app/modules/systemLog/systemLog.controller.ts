@@ -15,4 +15,14 @@ const getSystemLogs = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-export const SystemLogController = { getSystemLogs };
+const getActorRoleOptions = catchAsync(async (_req: Request, res: Response) => {
+  const result = await SystemLogServices.getActorRoleOptionsFromDB();
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Actor role options retrieved successfully",
+    data: result,
+  });
+});
+
+export const SystemLogController = { getSystemLogs, getActorRoleOptions };

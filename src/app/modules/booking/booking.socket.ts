@@ -43,11 +43,15 @@ export const registerBookingLocationSocket = (_io: Server, socket: Socket) => {
   socket.on("booking:join", async (payload, ack: Ack) => {
     try {
       const bookingId = payload?.bookingId as string | undefined;
-      const userId = payload?.userId as string | undefined;
-      if (!bookingId || !userId) {
+      // Who is joining comes from the verified socket token, never the payload.
+      const userId = (socket.data.user as { id?: string } | undefined)?.id;
+      if (!userId) {
+        return safeAck(ack, { success: false, message: "Unauthorized" });
+      }
+      if (!bookingId) {
         return safeAck(ack, {
           success: false,
-          message: "bookingId and userId required",
+          message: "bookingId required",
         });
       }
       const member = await findBookingMember(userId, bookingId);

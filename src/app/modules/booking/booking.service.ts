@@ -565,6 +565,21 @@ const updateBookingInDB = async (
     throw new ApiError(StatusCodes.NOT_FOUND, "Booking not found");
   }
 
+  // Riders/drivers may only update their own trip, and can't move it to
+  // another rider/driver or approve it themselves.
+  if (!STAFF.has(user.role)) {
+    const ownerField = user.role === USER_ROLES.DRIVER ? "driverId" : "userId";
+    if (String(existing[ownerField] ?? "") !== String(user.id)) {
+      throw new ApiError(
+        StatusCodes.FORBIDDEN,
+        "You can only update your own booking",
+      );
+    }
+    delete (payload as Partial<IBooking>).userId;
+    delete (payload as Partial<IBooking>).driverId;
+    delete (payload as Partial<IBooking>).isApproved;
+  }
+
   // Server-set no-show audit fields; clients may only send noShowReason.
   delete payload.noShowAt;
   delete payload.noShowBy;

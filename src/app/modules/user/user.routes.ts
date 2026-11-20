@@ -30,7 +30,12 @@ router.get(
 router
   .route("/")
   .post(
-    getUploadFields(),
+    // Public route: only license/profile images, max 20MB each
+    getUploadFields([
+      "image",
+      "driverData.licenseImage",
+      "driverData[licenseImage]",
+    ]),
     parseRequestBody(),
     async (req: Request, _res: Response, next: NextFunction) => {
       try {
@@ -108,23 +113,27 @@ router
   .route("/dispatcher")
   .post(
     auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+    checkDispatcherRoute("/staff"),
     UserController.createDispatcherAsAdmin,
   )
   .get(
     auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+    checkDispatcherRoute("/staff"),
     UserController.getAllDispatchers,
   );
 
 router.patch(
   "/dispatcher/:id/routes",
-  auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER, USER_ROLES.DRIVER),
+  auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+  checkDispatcherRoute("/staff"),
   validateRequest(UserValidation.updateDispatcherRoutesZodSchema),
   UserController.updateDispatcherRoutes,
 );
 router.route("/driver")
 .post(
+  auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+  checkDispatcherRoute("/drivers"),
   getUploadFields(),
-  auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER, USER_ROLES.DRIVER),
   async (req: Request, _res: Response, next: NextFunction) => {
     try {
       const data = parseBody<Record<string, any>>(req.body);
@@ -170,6 +179,7 @@ router
   .route("/riders")
   .get(
     auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+    checkDispatcherRoute("/riders"),
     UserController.getAllRiders,
   );
 

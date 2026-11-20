@@ -48,6 +48,7 @@ const updateDriverRating = catchAsync(async (req: Request, res: Response) => {
   const driverRating = await DriverratingServices.updateDriverRatingIntoDB(
     req.params.id,
     req.body,
+    req.user,
   );
   sendResponse(res, {
     success: true,

@@ -3,27 +3,50 @@ import { StatusCodes } from "http-status-codes";
 import { jwtHelpers } from "../../helpers/jwtHelper";
 import ApiError from "../../errors/ApiErrors";
 import { User } from "../modules/user/user.model";
-import { AUTH_COOKIE_ACCESS } from "../../util/cookie";
+import crypto from "crypto";
+import { AUTH_COOKIE_ACCESS, AUTH_COOKIE_CSRF } from "../../util/cookie";
 
-function resolveAccessToken(req: Request): string | undefined {
+const SAFE_METHODS = ["GET", "HEAD", "OPTIONS"];
+
+function resolveAccessToken(
+  req: Request,
+): { token?: string; fromCookie: boolean } {
   const authHeader = req.headers.authorization;
   if (authHeader?.startsWith("Bearer ")) {
     const t = authHeader.split(" ")[1];
-    return t || undefined;
+    return { token: t || undefined, fromCookie: false };
   }
   const fromCookie = req.cookies?.[AUTH_COOKIE_ACCESS] as string | undefined;
-  return fromCookie;
+  return { token: fromCookie, fromCookie: true };
+}
+
+// Cookie auth is sent by the browser automatically, so state-changing
+// requests must also echo the csrf_token cookie in the X-CSRF-Token header
+// (double-submit). Bearer-token requests don't need this.
+function assertCsrf(req: Request) {
+  if (SAFE_METHODS.includes(req.method)) return;
+  const cookieToken = req.cookies?.[AUTH_COOKIE_CSRF];
+  const headerToken = req.headers["x-csrf-token"];
+  if (
+    !cookieToken ||
+    typeof headerToken !== "string" ||
+    headerToken.length !== cookieToken.length ||
+    !crypto.timingSafeEqual(Buffer.from(headerToken), Buffer.from(cookieToken))
+  ) {
+    throw new ApiError(StatusCodes.FORBIDDEN, "Invalid CSRF token");
+  }
 }
 
 const auth =
   (...roles: string[]) =>
   async (req: Request, _res: Response, next: NextFunction) => {
     try {
-      const token = resolveAccessToken(req);
+      const { token, fromCookie } = resolveAccessToken(req);
 
       if (!token) {
         throw new ApiError(StatusCodes.UNAUTHORIZED, "You are not authorized");
       }
+      if (fromCookie) assertCsrf(req);
 
       let verifyUser = null;
       try {
@@ -48,6 +71,13 @@ const auth =
       }
       if (dbUser.isBanned) {
         throw new ApiError(StatusCodes.UNAUTHORIZED, "Account is suspended");
+      }
+
+      if (!jwtHelpers.isTokenVersionValid(verifyUser, dbUser.tokenVersion)) {
+        throw new ApiError(
+          StatusCodes.UNAUTHORIZED,
+          "Session expired. Please login again",
+        );
       }
 
       if (dbUser.role !== verifyUser.role) {

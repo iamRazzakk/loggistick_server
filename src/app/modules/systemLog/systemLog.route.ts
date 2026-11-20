@@ -6,6 +6,12 @@ import { SystemLogController } from "./systemLog.controller";
 const router = express.Router();
 
 router.get(
+  "/actor-roles",
+  auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
+  SystemLogController.getActorRoleOptions,
+);
+
+router.get(
   "/",
   auth(USER_ROLES.SUPER_ADMIN, USER_ROLES.DISPATCHER),
   SystemLogController.getSystemLogs,

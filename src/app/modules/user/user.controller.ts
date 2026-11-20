@@ -22,7 +22,10 @@ const createUser = catchAsync(
 // create dispatcher as admin
 const createDispatcherAsAdmin = catchAsync(
   async (req: Request, res: Response) => {
-    const result = await UserService.createDispatcherAsAdminIntoDB(req.body);
+    const result = await UserService.createDispatcherAsAdminIntoDB(
+      req.body,
+      req.user,
+    );
     sendResponse(res, {
       success: true,
       statusCode: StatusCodes.CREATED,
@@ -50,6 +53,7 @@ const updateDispatcherRoutes = catchAsync(
     const result = await UserService.updateDispatcherRoutesIntoDB(
       req.params.id,
       req.body.accessScope,
+      req.user,
     );
     sendResponse(res, {
       success: true,
@@ -90,7 +94,7 @@ const updateProfile = catchAsync(
 
 // driver list
 const getAllDrivers = catchAsync(async (req: Request, res: Response) => {
-  const result = await UserService.getAllDriversFromDB(req.query);
+  const result = await UserService.getAllDriversFromDB(req.query, req.user);
   sendResponse(res, {
     success: true,
     statusCode: StatusCodes.OK,

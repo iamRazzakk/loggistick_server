@@ -9,12 +9,95 @@ import { randomUUID } from "crypto";
 import { emailQueue } from "../../../queue/email.queue";
 import { redisService } from "../../../redis/redis.service";
 import { USER_ROLES } from "../../../enums/user";
-import { setDispatcherRoutes } from "../../../helpers/dispatcherRouteCache";
+import {
+  getDispatcherAllowedSet,
+  setDispatcherRoutes,
+} from "../../../helpers/dispatcherRouteCache";
 import { findInvalidDispatcherRoutes } from "../../../util/permissionRouteList";
 import QueryBuilder from "../../builder/queryBuilder";
 
+// Public signup: only riders and drivers can self-register.
+const SIGNUP_ROLES: string[] = [USER_ROLES.USER, USER_ROLES.DRIVER];
+
+// Fields a person may set on public signup. Everything else
+// (verified, isAdminVerifiedDriver, isBanned, accessScope, applicationStatus,
+// trip, stripe ids, …) is ignored and falls back to the schema defaults.
+const SIGNUP_FIELDS = [
+  "firstName",
+  "middleName",
+  "lastName",
+  "dateOfBirth",
+  "contact",
+  "email",
+  "password",
+  "role",
+  "location",
+  "county",
+  "authorizationID",
+] as const;
+
+const DRIVER_DATA_FIELDS = [
+  "driverExperience",
+  "licenseNumber",
+  "licenseClass",
+  "expirationDate",
+  "licenseImage",
+] as const;
+
+// Fields a logged-in user may change on their own profile.
+const PROFILE_UPDATE_FIELDS = [
+  "firstName",
+  "middleName",
+  "lastName",
+  "dateOfBirth",
+  "contact",
+  "location",
+  "profile",
+  "isPushNotificationEnabled",
+] as const;
+
+// Fields an admin/dispatcher may set when creating a driver.
+const ADMIN_DRIVER_FIELDS = [
+  "firstName",
+  "middleName",
+  "lastName",
+  "dateOfBirth",
+  "contact",
+  "email",
+  "password",
+  "location",
+  "county",
+] as const;
+
+const pickFields = <T extends Record<string, any>>(
+  source: T | undefined,
+  fields: readonly string[],
+) => {
+  const result: Record<string, unknown> = {};
+  if (!source || typeof source !== "object") return result;
+  for (const field of fields) {
+    if (source[field] !== undefined) result[field] = source[field];
+  }
+  return result;
+};
+
 const createUserToDB = async (payload: Partial<IUser>): Promise<IUser> => {
-  const createUser = await User.create(payload);
+  if (!payload.role || !SIGNUP_ROLES.includes(payload.role)) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "Role must be USER or DRIVER",
+    );
+  }
+
+  const safePayload: Record<string, unknown> = pickFields(
+    payload,
+    SIGNUP_FIELDS,
+  );
+  if (payload.role === USER_ROLES.DRIVER && payload.driverData) {
+    safePayload.driverData = pickFields(payload.driverData, DRIVER_DATA_FIELDS);
+  }
+
+  const createUser = await User.create(safePayload);
   if (!createUser) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to create user");
   }
@@ -70,16 +153,29 @@ const updateProfileToDB = async (
     throw new ApiError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
   }
 
-  const { accessScope: _accessScope, ...safePayload } = payload;
+  // Only profile fields. role, email, password, verified, isBanned,
+  // isAdminVerifiedDriver, accessScope, driverData, stripe ids… are ignored.
+  // Dispatchers can't change their middleName (it is their role label in system logs).
+  const allowedFields =
+    isExistUser.role === USER_ROLES.DISPATCHER
+      ? PROFILE_UPDATE_FIELDS.filter((field) => field !== "middleName")
+      : PROFILE_UPDATE_FIELDS;
+  const safePayload = pickFields(payload, allowedFields);
+
   const updateDoc = await User.findOneAndUpdate({ _id: id }, safePayload, {
     new: true,
+    runValidators: true,
   });
   return updateDoc;
 };
 
 // driver list
+const PUBLIC_DRIVER_FIELDS =
+  "firstName middleName lastName profile trip isOnDuty location";
+
 const getAllDriversFromDB = async (
   query: Record<string, any>,
+  actor?: JwtPayload,
 ): Promise<{ data: Partial<IUser>[]; meta: any }> => {
   const { searchTerm, ...restQuery } = query;
   const term = String(searchTerm ?? "").trim();
@@ -103,7 +199,13 @@ const getAllDriversFromDB = async (
     }));
   }
 
-  const qb = new QueryBuilder(User.find(filter), restQuery).filter().paginate();
+  // Riders only see public driver info; admins/dispatchers see everything.
+  const baseQuery = User.find(filter);
+  if (actor?.role === USER_ROLES.USER) {
+    baseQuery.select(PUBLIC_DRIVER_FIELDS);
+  }
+
+  const qb = new QueryBuilder(baseQuery, restQuery).filter().paginate();
   const [data, meta] = await Promise.all([
     qb.modelQuery.exec(),
     qb.getPaginationInfo(),
@@ -198,11 +300,28 @@ const getAllDispatchersFromDB = async (
   return { data, meta };
 };
 
-const createDispatcherAsAdminIntoDB = async (payload: Partial<IUser>) => {
+// A dispatcher can only hand out routes they have themselves.
+const assertScopeWithinActor = async (actor: JwtPayload, routes: string[]) => {
+  if (actor?.role === USER_ROLES.SUPER_ADMIN) return;
+  const actorScope = new Set(await getDispatcherAllowedSet(String(actor?.id)));
+  const notAllowed = routes.filter((route) => !actorScope.has(route));
+  if (notAllowed.length) {
+    throw new ApiError(
+      StatusCodes.FORBIDDEN,
+      `You can't grant routes you don't have: ${notAllowed.join(", ")}`,
+    );
+  }
+};
+
+const createDispatcherAsAdminIntoDB = async (
+  payload: Partial<IUser>,
+  actor: JwtPayload,
+) => {
   if (!payload.accessScope) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Access scope is required!");
   }
   const accessScope = normalizeAllowedRoutes(payload.accessScope);
+  await assertScopeWithinActor(actor, accessScope);
   const result = await User.create({
     firstName: payload.firstName,
     lastName: payload.lastName,
@@ -239,8 +358,18 @@ const createDispatcherAsAdminIntoDB = async (payload: Partial<IUser>) => {
 const updateDispatcherRoutesIntoDB = async (
   dispatcherId: string,
   accessScope: string[],
+  actor: JwtPayload,
 ) => {
   const routes = normalizeAllowedRoutes(accessScope);
+  if (actor?.role !== USER_ROLES.SUPER_ADMIN) {
+    if (String(actor?.id) === String(dispatcherId)) {
+      throw new ApiError(
+        StatusCodes.FORBIDDEN,
+        "You can't change your own access scope",
+      );
+    }
+    await assertScopeWithinActor(actor, routes);
+  }
   const dispatcher = await User.findOneAndUpdate(
     { _id: dispatcherId, role: USER_ROLES.DISPATCHER },
     { accessScope: routes },
@@ -256,10 +385,15 @@ const updateDispatcherRoutesIntoDB = async (
 };
 
 const createDriverAsAdminIntoDB = async (payload: IUser) => {
-  payload.verified = true;
-  payload.isAdminVerifiedDriver = true;
-  payload.applicationStatus = "approved";
-  const result = await User.create(payload);
+  // role is always DRIVER here — never taken from the body.
+  const result = await User.create({
+    ...pickFields(payload, ADMIN_DRIVER_FIELDS),
+    driverData: pickFields(payload.driverData, DRIVER_DATA_FIELDS),
+    role: USER_ROLES.DRIVER,
+    verified: true,
+    isAdminVerifiedDriver: true,
+    applicationStatus: "approved",
+  });
   if (!result) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Failed to create driver");
   }

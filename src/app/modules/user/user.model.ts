@@ -156,6 +156,11 @@ const userSchema = new Schema<IUser, UserModal>(
       type: Boolean,
       default: false,
     },
+    // Bumped on password change/reset to invalidate old JWTs
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
     authProvider: {
       type: String,
       enum: Object.values(AUTH_PROVIDERS),

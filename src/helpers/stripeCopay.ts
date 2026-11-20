@@ -129,7 +129,10 @@ export const finalizePassengerCopay = async (params: {
     {
       $setOnInsert: {
         bookingId: booking._id,
-        price: booking.passengerCoPay ?? booking.price,
+        // `price` is a legacy field on old bookings (not in IBooking any more)
+        price:
+          booking.passengerCoPay ??
+          (booking as unknown as { price?: number }).price,
         paymentStatus: "paid",
         userId: booking.userId,
         txnNumber: params.txnNumber,

@@ -9,7 +9,6 @@ const router = express.Router();
 
 router.post(
   "/",
-  fileUploadHandler(),
   auth(
     USER_ROLES.SUPER_ADMIN,
     USER_ROLES.DISPATCHER,
@@ -17,6 +16,7 @@ router.post(
     USER_ROLES.DRIVER,
   ),
   checkDispatcherRoute("/support"),
+  fileUploadHandler(),
   async (req: Request, _res: Response, next: NextFunction) => {
     try {
       const data = req.body;

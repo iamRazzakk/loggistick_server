@@ -37,6 +37,7 @@ export type IUser = {
   profile: string;
   verified: boolean;
   authProvider?: AUTH_PROVIDERS;
+  tokenVersion?: number;
   /** Firebase UID for social accounts. */
   socialId?: string;
   isBanned: boolean;

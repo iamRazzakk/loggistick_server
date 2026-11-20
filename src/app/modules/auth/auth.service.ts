@@ -89,9 +89,13 @@ const loginUserFromDB = async (payload: ILoginData) => {
   const accessToken = jwtHelpers.createAccessToken({
     id: user._id.toString(),
     role: user.role,
+    tokenVersion: user.tokenVersion,
   });
 
-  const refreshToken = jwtHelpers.createRefreshToken(user._id.toString());
+  const refreshToken = jwtHelpers.createRefreshToken(
+    user._id.toString(),
+    user.tokenVersion,
+  );
 
   return {
     role: user.role,
@@ -210,8 +214,12 @@ const socialLoginFromDB = async (payload: ISocialLoginData) => {
   const accessToken = jwtHelpers.createAccessToken({
     id: user._id.toString(),
     role: user.role,
+    tokenVersion: user.tokenVersion,
   });
-  const refreshToken = jwtHelpers.createRefreshToken(user._id.toString());
+  const refreshToken = jwtHelpers.createRefreshToken(
+    user._id.toString(),
+    user.tokenVersion,
+  );
 
   return {
     role: user.role,
@@ -273,6 +281,7 @@ const verifyEmailToDB = async (payload: IVerifyEmail) => {
       accessToken: jwtHelpers.createAccessToken({
         id: isExistUser._id.toString(),
         role: isExistUser.role,
+        tokenVersion: isExistUser.tokenVersion,
       }),
     };
   } else {
@@ -345,6 +354,8 @@ const resetPasswordToDB = async (
     authentication: {
       isResetPassword: false,
     },
+    // log out every existing session
+    $inc: { tokenVersion: 1 },
   };
 
   await User.findOneAndUpdate({ _id: isExistToken.user }, updateData, {
@@ -362,12 +373,18 @@ const changePasswordToDB = async (
     throw new ApiError(StatusCodes.BAD_REQUEST, "User doesn't exist!");
   }
 
-  //current password match
-  if (
-    currentPassword &&
-    !(await User.isMatchPassword(currentPassword, isExistUser.password))
-  ) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, "Password is incorrect");
+  //current password match — always required when the account has a password
+  // (social-only accounts have none and may set one).
+  if (isExistUser.password) {
+    if (!currentPassword) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "Current password is required",
+      );
+    }
+    if (!(await User.isMatchPassword(currentPassword, isExistUser.password))) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, "Password is incorrect");
+    }
   }
 
   //newPassword and current password
@@ -394,6 +411,8 @@ const changePasswordToDB = async (
 
   const updateData = {
     password: hashPassword,
+    // log out every other session; the client must login again
+    $inc: { tokenVersion: 1 },
   };
 
   await User.findOneAndUpdate({ _id: user.id }, updateData, { new: true });
@@ -420,14 +439,28 @@ const newAccessTokenToUser = async (refreshToken: string) => {
   if (!user) {
     throw new ApiError(StatusCodes.UNAUTHORIZED, "User not found!");
   }
+  if (user.isBanned) {
+    throw new ApiError(StatusCodes.UNAUTHORIZED, "Account is suspended");
+  }
+  // Password changed/reset after this token was issued → reject
+  if (!jwtHelpers.isTokenVersionValid(decoded, user.tokenVersion)) {
+    throw new ApiError(
+      StatusCodes.UNAUTHORIZED,
+      "Session expired. Please login again",
+    );
+  }
 
   // New Access Token create
   const newAccessToken = jwtHelpers.createAccessToken({
     id: user._id.toString(),
     role: user.role,
+    tokenVersion: user.tokenVersion,
   });
 
-  const newRefreshToken = jwtHelpers.createRefreshToken(user._id.toString());
+  const newRefreshToken = jwtHelpers.createRefreshToken(
+    user._id.toString(),
+    user.tokenVersion,
+  );
 
   return {
     accessToken: newAccessToken,

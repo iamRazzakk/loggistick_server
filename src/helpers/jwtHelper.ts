@@ -3,7 +3,13 @@ import config from "../config";
 import crypto from "crypto";
 
 // Access Token create
-const createAccessToken = (user: { id: string; role: string }) => {
+// `tv` = the user's tokenVersion. Bumping User.tokenVersion (password
+// change/reset) invalidates every token issued before it.
+const createAccessToken = (user: {
+  id: string;
+  role: string;
+  tokenVersion?: number;
+}) => {
   // @ts-ignore
   return jwt.sign(
     {
@@ -11,7 +17,7 @@ const createAccessToken = (user: { id: string; role: string }) => {
       role: user.role,
       iss: config.jwt.issuer,
       aud: config.jwt.audience,
-      tokenVersion: config.jwt.tokenVersion,
+      tv: user.tokenVersion ?? 0,
       jti: crypto.randomUUID(),
     },
     config.jwt.secret,
@@ -23,11 +29,12 @@ const createAccessToken = (user: { id: string; role: string }) => {
 };
 
 // Refresh Token create
-const createRefreshToken = (userId: string) => {
+const createRefreshToken = (userId: string, tokenVersion?: number) => {
   // @ts-ignore
   return jwt.sign(
     {
       id: userId,
+      tv: tokenVersion ?? 0,
       jti: crypto.randomUUID(),
       iss: config.jwt.issuer,
       aud: config.jwt.audience,
@@ -58,7 +65,14 @@ const verifyRefreshToken = (token: string) => {
   }) as jwt.JwtPayload;
 };
 
+// Tokens issued before this change have no `tv` → treated as version 0.
+const isTokenVersionValid = (
+  decoded: jwt.JwtPayload,
+  userTokenVersion?: number | null,
+) => Number(decoded?.tv ?? 0) === Number(userTokenVersion ?? 0);
+
 export const jwtHelpers = {
+  isTokenVersionValid,
   createAccessToken,
   createRefreshToken,
   verifyAccessToken,

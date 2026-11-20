@@ -24,7 +24,9 @@ const getAllReportsFromDB = async (query: Record<string, any>) => {
   const { tripType, ...restQuery } = query;
   const filter: Record<string, unknown> = {};
   if (tripType) {
-    const tripIds = await Booking.find({ tripType }).distinct("_id");
+    const tripIds = await Booking.find({ tripType: String(tripType) }).distinct(
+      "_id",
+    );
     filter.tripId = { $in: tripIds };
   }
   const qb = new QueryBuilder(
