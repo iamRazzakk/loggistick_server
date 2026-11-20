@@ -19,6 +19,28 @@ const createLoginZodSchema = z.object({
   }),
 });
 
+const createSocialLoginZodSchema = z.object({
+  body: z.object({
+    // Firebase ID token from the app (FirebaseAuth.currentUser.getIdToken())
+    token: z.string({ required_error: "Token is required" }).min(1),
+    social_type: z
+      .string()
+      .transform((v) => v.toLowerCase())
+      .pipe(z.enum(["google", "apple", "facebook"]))
+      .optional(),
+    role: z
+      .string()
+      .transform((v) => v.toUpperCase())
+      .pipe(z.enum(["USER", "DRIVER"]))
+      .optional(),
+    fcmToken: z.string().min(1).optional(),
+    name: z.string().optional(),
+    email: z.string().optional(),
+    picture: z.string().optional(),
+    appId: z.string().optional(),
+  }),
+});
+
 const createForgetPasswordZodSchema = z.object({
   body: z.object({
     email: z
@@ -63,4 +85,5 @@ export const AuthValidation = {
   createResetPasswordZodSchema,
   createChangePasswordZodSchema,
   createResendOtpZodSchema,
+  createSocialLoginZodSchema,
 };

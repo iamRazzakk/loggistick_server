@@ -32,6 +32,18 @@ const loginUser = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const socialLogin = catchAsync(async (req: Request, res: Response) => {
+  const result = await AuthService.socialLoginFromDB(req.body);
+
+  setAuthCookies(res, result.accessToken, result.refreshToken);
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "User login successfully",
+    data: result,
+  });
+});
+
 const forgetPassword = catchAsync(async (req: Request, res: Response) => {
   const email = req.body.email;
   const result = await AuthService.forgetPasswordToDB(email);
@@ -134,6 +146,7 @@ const deleteUser = catchAsync(async (req: Request, res: Response) => {
 export const AuthController = {
   verifyEmail,
   loginUser,
+  socialLogin,
   forgetPassword,
   resetPassword,
   changePassword,

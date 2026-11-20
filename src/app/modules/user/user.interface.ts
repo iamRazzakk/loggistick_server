@@ -8,6 +8,13 @@ export interface IDriverData {
   expirationDate: Date;
   licenseImage: string[];
 }
+export enum AUTH_PROVIDERS {
+  LOCAL = "local",
+  GOOGLE = "google",
+  APPLE = "apple",
+  FACEBOOK = "facebook",
+}
+
 // Main User interface
 export type IUser = {
   publicId: string;
@@ -29,6 +36,9 @@ export type IUser = {
   location: string;
   profile: string;
   verified: boolean;
+  authProvider?: AUTH_PROVIDERS;
+  /** Firebase UID for social accounts. */
+  socialId?: string;
   isBanned: boolean;
   isOnDuty?: boolean;
   isAdminVerifiedDriver?: boolean;

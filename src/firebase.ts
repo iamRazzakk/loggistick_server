@@ -1,10 +1,11 @@
 import { cert, getApps, initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { getMessaging } from "firebase-admin/messaging";
 import { StatusCodes } from "http-status-codes";
 import config from "./config";
 import ApiError from "./errors/ApiErrors";
 
-export const getFirebaseMessaging = () => {
+const ensureFirebaseApp = () => {
   const { projectId, clientEmail, privateKey } = config.firebase;
   if (!projectId || !clientEmail || !privateKey) {
     throw new ApiError(
@@ -22,6 +23,14 @@ export const getFirebaseMessaging = () => {
       }),
     });
   }
+};
 
+export const getFirebaseMessaging = () => {
+  ensureFirebaseApp();
   return getMessaging();
+};
+
+export const getFirebaseAuth = () => {
+  ensureFirebaseApp();
+  return getAuth();
 };

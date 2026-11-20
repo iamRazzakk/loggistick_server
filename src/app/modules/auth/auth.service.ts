@@ -10,6 +10,7 @@ import {
   IAuthResetPassword,
   IChangePassword,
   ILoginData,
+  ISocialLoginData,
   IVerifyEmail,
 } from "../../../types/auth";
 import cryptoToken from "../../../util/cryptoToken";
@@ -21,6 +22,8 @@ import { redisService } from "../../../redis/redis.service";
 import { USER_ROLES } from "../../../enums/user";
 import { setDispatcherRoutes } from "../../../helpers/dispatcherRouteCache";
 import { Booking } from "../booking/booking.model";
+import { getFirebaseAuth } from "../../../firebase";
+import { AUTH_PROVIDERS } from "../user/user.interface";
 
 //login
 const loginUserFromDB = async (payload: ILoginData) => {
@@ -53,6 +56,14 @@ const loginUserFromDB = async (payload: ILoginData) => {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
       "Your Account is Banned Please Contact Support!",
+    );
+  }
+
+  // Social accounts have no password
+  if (!user.password) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "This account uses social login. Please sign in with Google/Apple.",
     );
   }
 
@@ -89,6 +100,123 @@ const loginUserFromDB = async (payload: ILoginData) => {
     ...(user.role === USER_ROLES.DISPATCHER
       ? { accessScope: user.accessScope ?? [] }
       : {}),
+  };
+};
+
+const FIREBASE_PROVIDER_MAP: Record<string, AUTH_PROVIDERS> = {
+  "google.com": AUTH_PROVIDERS.GOOGLE,
+  "apple.com": AUTH_PROVIDERS.APPLE,
+  "facebook.com": AUTH_PROVIDERS.FACEBOOK,
+};
+
+const SOCIAL_LOGIN_ROLES: string[] = [USER_ROLES.USER, USER_ROLES.DRIVER];
+
+//social login (Firebase ID token)
+const socialLoginFromDB = async (payload: ISocialLoginData) => {
+  const { token, fcmToken, role, name, picture } = payload;
+
+  // 1. Verify the Firebase ID token — never trust email/name from the body
+  let decoded;
+  try {
+    decoded = await getFirebaseAuth().verifyIdToken(token);
+  } catch (error) {
+    throw new ApiError(
+      StatusCodes.UNAUTHORIZED,
+      "Invalid or expired social login token!",
+    );
+  }
+
+  const email = decoded.email?.toLowerCase();
+  if (!email) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "Your social account has no email address!",
+    );
+  }
+  if (decoded.email_verified === false) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "Your social account email is not verified!",
+    );
+  }
+
+  const provider =
+    FIREBASE_PROVIDER_MAP[decoded.firebase?.sign_in_provider] ??
+    payload.social_type ??
+    AUTH_PROVIDERS.GOOGLE;
+
+  // 2. Find existing account (by Firebase UID first, then email) or create one
+  let user = await User.findOne({
+    $or: [{ socialId: decoded.uid }, { email }],
+  });
+
+  if (user) {
+    if (!SOCIAL_LOGIN_ROLES.includes(user.role)) {
+      throw new ApiError(
+        StatusCodes.FORBIDDEN,
+        "Social login is not available for this account!",
+      );
+    }
+    // Link the social account to an existing email/password account
+    const update: Record<string, unknown> = {};
+    if (!user.socialId) update.socialId = decoded.uid;
+    if (!user.verified) update.verified = true;
+    if (Object.keys(update).length) {
+      await User.updateOne({ _id: user._id }, { $set: update });
+      Object.assign(user, update);
+    }
+  } else {
+    const fullName = (decoded.name || name || "").trim();
+    const [firstName, ...rest] = fullName ? fullName.split(/\s+/) : [];
+    user = await User.create({
+      firstName: firstName || email.split("@")[0],
+      lastName: rest.join(" ") || undefined,
+      email,
+      role: role ?? USER_ROLES.USER,
+      authProvider: provider,
+      socialId: decoded.uid,
+      verified: true,
+      ...(decoded.picture || picture
+        ? { profile: decoded.picture || picture }
+        : {}),
+    });
+  }
+
+  // 3. Same checks as normal login
+  if (!fcmToken) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Device token is required!");
+  }
+  if (user.role === USER_ROLES.DRIVER && !user.isAdminVerifiedDriver) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "Please wait for admin verification!",
+    );
+  }
+  if (user.isBanned) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "Your Account is Banned Please Contact Support!",
+    );
+  }
+
+  if (user.fcmToken !== fcmToken) {
+    await User.updateMany(
+      { _id: { $ne: user._id }, fcmToken },
+      { $set: { fcmToken: null } },
+    );
+    await User.findByIdAndUpdate(user._id, { fcmToken });
+  }
+
+  const accessToken = jwtHelpers.createAccessToken({
+    id: user._id.toString(),
+    role: user.role,
+  });
+  const refreshToken = jwtHelpers.createRefreshToken(user._id.toString());
+
+  return {
+    role: user.role,
+    accessToken,
+    refreshToken,
   };
 };
 
@@ -411,7 +539,7 @@ export const AuthService = {
   changePasswordToDB,
   newAccessTokenToUser,
   resendVerificationEmailToDB,
-  // socialLoginFromDB,
+  socialLoginFromDB,
   deleteUserFromDB,
   getSingleUserDetailsFromDB,
 };

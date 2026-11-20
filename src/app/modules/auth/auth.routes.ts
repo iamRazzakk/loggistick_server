@@ -16,6 +16,13 @@ router.post(
 );
 
 router.post(
+  "/social-login",
+  authLimiter,
+  validateRequest(AuthValidation.createSocialLoginZodSchema),
+  AuthController.socialLogin,
+);
+
+router.post(
   "/forgot-password",
   authLimiter,
   validateRequest(AuthValidation.createForgetPasswordZodSchema),

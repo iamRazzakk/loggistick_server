@@ -1,6 +1,11 @@
 import { model, Schema } from "mongoose";
 import { USER_ROLES } from "../../../enums/user";
-import { IDriverData, IUser, UserModal } from "./user.interface";
+import {
+  AUTH_PROVIDERS,
+  IDriverData,
+  IUser,
+  UserModal,
+} from "./user.interface";
 import bcrypt from "bcrypt";
 import ApiError from "../../../errors/ApiErrors";
 import { StatusCodes } from "http-status-codes";
@@ -40,6 +45,11 @@ const driverDataSchema = new Schema<IDriverData>(
   },
 );
 
+// Social (Google/Apple/Facebook) accounts sign up without these fields.
+function isLocalAccount(this: IUser) {
+  return !this.authProvider || this.authProvider === AUTH_PROVIDERS.LOCAL;
+}
+
 const userSchema = new Schema<IUser, UserModal>(
   {
     firstName: {
@@ -52,11 +62,11 @@ const userSchema = new Schema<IUser, UserModal>(
     },
     lastName: {
       type: String,
-      required: true,
+      required: isLocalAccount,
     },
     dateOfBirth: {
       type: Date,
-      required: true,
+      required: isLocalAccount,
     },
     role: {
       type: String,
@@ -98,7 +108,7 @@ const userSchema = new Schema<IUser, UserModal>(
     },
     contact: {
       type: String,
-      required: [true, "Contact is required!"],
+      required: [isLocalAccount, "Contact is required!"],
       match: [/^\+?[1-9]\d{1,14}$/, "Please provide a valid contact number!"],
     },
     isAdminVerifiedDriver: {
@@ -107,7 +117,7 @@ const userSchema = new Schema<IUser, UserModal>(
     },
     password: {
       type: String,
-      required: [true, "Password is required!"],
+      required: [isLocalAccount, "Password is required!"],
       select: 0,
       minlength: 8,
     },
@@ -146,6 +156,15 @@ const userSchema = new Schema<IUser, UserModal>(
       type: Boolean,
       default: false,
     },
+    authProvider: {
+      type: String,
+      enum: Object.values(AUTH_PROVIDERS),
+      default: AUTH_PROVIDERS.LOCAL,
+    },
+    socialId: {
+      type: String,
+      required: false,
+    },
     fcmToken: {
       type: String,
       required: false,
@@ -177,6 +196,7 @@ const userSchema = new Schema<IUser, UserModal>(
 // if filtering by role often
 userSchema.index({ role: 1 });
 userSchema.index({ stripeCustomerId: 1 }, { unique: true, sparse: true });
+userSchema.index({ socialId: 1 }, { sparse: true });
 //exist user check
 userSchema.statics.isExistUserById = async (id: string) => {
   const isExist = await User.findById(id);
@@ -204,11 +224,13 @@ userSchema.pre("save", async function (next) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Email already exist!");
   }
 
-  //password hash
-  this.password = await bcrypt.hash(
-    this.password,
-    Number(config.bcrypt_salt_rounds),
-  );
+  //password hash (social accounts have no password)
+  if (this.password) {
+    this.password = await bcrypt.hash(
+      this.password,
+      Number(config.bcrypt_salt_rounds),
+    );
+  }
   next();
 });
 export const User = model<IUser, UserModal>("User", userSchema);
