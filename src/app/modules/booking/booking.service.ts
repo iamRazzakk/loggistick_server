@@ -322,7 +322,7 @@ const getAllBookingsFromDB = async (
     qb.getPaginationInfo(),
   ]);
 
-  return { data, meta };
+  return { data: presentBookingsForViewer(data, _user.role), meta };
 };
 
 // all approved bookings
@@ -357,7 +357,7 @@ const getAllApprovedBookingsFromDB = async (
     qb.modelQuery.lean().exec(),
     qb.getPaginationInfo(),
   ]);
-  return { data, meta };
+  return { data: presentBookingsForViewer(data, user.role), meta };
 };
 
 // trip history
@@ -440,6 +440,7 @@ export const buildTripHistoryFile = async (
     bookingFilter.driverId = { $in: [null] };
   }
   const bookings = await Booking.find(bookingFilter)
+    .select(role === USER_ROLES.SUPER_ADMIN ? "+adminStatus" : "")
     .sort(query.sort || "-serviceDate")
     .populate([
       { path: "userId", select: "firstName lastName" },

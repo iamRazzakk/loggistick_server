@@ -6,6 +6,7 @@ import colors from "colors";
 import { socketHelper } from "./helpers/socketHelper";
 import { Server } from "socket.io";
 import seedSuperAdmin from "./DB";
+import backfillAdminStatus from "./DB/backfillAdminStatus";
 import "./worker/email.worker"; // Email worker
 import "./worker/booking.worker"; // Booking worker
 import "./worker/notification.worker"; // Broadcast notification worker
@@ -41,6 +42,7 @@ async function main() {
     logger.info(colors.green("🚀 Database connected successfully"));
 
     await seedSuperAdmin();
+    await backfillAdminStatus();
 
     const port =
       typeof config.port === "number" ? config.port : Number(config.port);

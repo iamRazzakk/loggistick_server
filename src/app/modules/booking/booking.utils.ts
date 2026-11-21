@@ -457,19 +457,30 @@ const FARE_KEYS = [
 ] as const;
 
 /** Passenger responses keep `price` (the co-pay) and drop the funding-source fare. */
+/**
+ * Super-admin-only status. Stored on every booking as "completed"
+ * (`adminStatus`, select: false). Only super admin ever receives it.
+ */
+export const ADMIN_STATUS = "completed" as const;
+
 export const presentBookingForViewer = <T>(booking: T, role?: string): T => {
-  if (role !== USER_ROLES.USER || !booking || Array.isArray(booking)) {
+  if (!booking || Array.isArray(booking) || typeof booking !== "object") {
     return booking;
   }
-  const source = booking as Record<string, unknown>;
-  const copy: Record<string, unknown> = { ...source };
+  const copy: Record<string, unknown> = { ...(booking as Record<string, unknown>) };
+  if (role === USER_ROLES.SUPER_ADMIN) {
+    copy.adminStatus = copy.adminStatus ?? ADMIN_STATUS;
+    return copy as T;
+  }
+  delete copy.adminStatus;
+  if (role !== USER_ROLES.USER) return copy as T;
   for (const key of FARE_KEYS) delete copy[key];
   if (copy.passengerCoPay != null) copy.price = copy.passengerCoPay;
   return copy as T;
 };
 
 export const presentBookingsForViewer = <T>(data: T, role?: string): T => {
-  if (role !== USER_ROLES.USER || data == null) return data;
+  if (data == null) return data;
   if (Array.isArray(data)) {
     return data.map((item) => presentBookingForViewer(item, role)) as T;
   }

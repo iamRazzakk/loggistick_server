@@ -41,6 +41,7 @@ export type TripHistoryBooking = {
   cancellationOutcome?: string;
   noShowOutcome?: string;
   bookingStatus?: string;
+  adminStatus?: string;
   price?: number;
   passengerCoPay?: number;
   organizationContribution?: number;
@@ -52,6 +53,8 @@ export type TripHistoryBooking = {
 
 type TripColumn = ExportColumn & {
   hiddenFrom?: string;
+  /** When set, only this role gets the column. */
+  onlyFor?: string;
   pick: (booking: TripHistoryBooking) => ExportCell;
 };
 
@@ -227,6 +230,13 @@ const COLUMNS: TripColumn[] = [
     pick: (booking) => text(booking.bookingStatus),
   },
   {
+    header: "Admin Status",
+    key: "adminStatus",
+    width: 16,
+    onlyFor: USER_ROLES.SUPER_ADMIN,
+    pick: (booking) => text(booking.adminStatus),
+  },
+  {
     header: "Price",
     key: "price",
     width: 12,
@@ -315,7 +325,10 @@ const COLUMNS: TripColumn[] = [
 ];
 
 export const columnsFor = (role?: string, requestedFields?: unknown) => {
-  const allowed = COLUMNS.filter((column) => column.hiddenFrom !== role);
+  const allowed = COLUMNS.filter(
+    (column) =>
+      column.hiddenFrom !== role && (!column.onlyFor || column.onlyFor === role),
+  );
   if (!requestedFields) {
     return allowed;
   }

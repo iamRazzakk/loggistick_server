@@ -33,6 +33,8 @@ export type IBooking = {
     | string[];
   endDate?: string;
   driverId?: Types.ObjectId;
+  /** Super-admin-only, always "completed" (select: false in the schema). */
+  adminStatus?: "completed";
   bookingStatus: BookingStatus;
   recurringBatchId?: string;
 

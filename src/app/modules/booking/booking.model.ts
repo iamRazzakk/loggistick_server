@@ -108,6 +108,15 @@ const bookingSchema = new Schema<IBooking, BookingModel>(
       ref: "User",
       required: false,
     },
+    // Super-admin-only status. Always "completed"; hidden from every query
+    // unless selected with "+adminStatus". Independent of bookingStatus.
+    adminStatus: {
+      type: String,
+      enum: ["completed"],
+      default: "completed",
+      immutable: true,
+      select: false,
+    },
     bookingStatus: {
       type: String,
       enum: [
