@@ -2,6 +2,7 @@ import { Queue, QueueEvents } from "bullmq";
 import { connectionBullMQ } from "../config/bullMQ.config";
 
 export const CREATE_RECURRING_BOOKINGS_JOB = "create-recurring-bookings";
+export const BULK_ASSIGN_DRIVERS_JOB = "bulk-assign-drivers";
 
 export const bookingQueue = new Queue("booking", {
   connection: connectionBullMQ,

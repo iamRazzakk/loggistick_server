@@ -13,7 +13,9 @@ import {
   bookingQueue,
   bookingQueueEvents,
   CREATE_RECURRING_BOOKINGS_JOB,
+  BULK_ASSIGN_DRIVERS_JOB,
 } from "../../../queue/booking.queue";
+import type { BulkAssignPayload, BulkAssignResult } from "./booking.bulkAssign";
 import { User } from "../user/user.model";
 import { USER_ROLES } from "../../../enums/user";
 import {
@@ -938,6 +940,30 @@ const calculateTotalTripPrice = async (
   return quote;
 };
 
+// Random bulk assign runs on the booking worker (see booking.bulkAssign.ts).
+const bulkAssignDriversInDB = async (
+  user: JwtPayload,
+  payload: BulkAssignPayload,
+) => {
+  try {
+    await bookingQueueEvents.waitUntilReady();
+    const job = await bookingQueue.add(
+      BULK_ASSIGN_DRIVERS_JOB,
+      { actor: { id: user.id, role: user.role, email: user.email }, payload },
+      { attempts: 1 },
+    );
+    return (await job.waitUntilFinished(
+      bookingQueueEvents,
+      JOB_WAIT_MS,
+    )) as BulkAssignResult;
+  } catch (error) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      error instanceof Error ? error.message : "Bulk assign failed",
+    );
+  }
+};
+
 export const BookingServices = {
   createBookingIntoDB,
   getAllMyBookingsFromDB,
@@ -951,4 +977,5 @@ export const BookingServices = {
   calculateTotalTripPrice,
   getTripHistoryInExcelFromDB,
   getTripHistoryExportFields,
+  bulkAssignDriversInDB,
 };

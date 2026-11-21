@@ -92,6 +92,15 @@ router
     checkDispatcherRoute("/schedule"),
     BookingController.getScheduledBookings,
   );
+// randomly assign active (on-duty) drivers to unassigned bookings, one by one
+router
+  .route("/bulk-assign")
+  .post(
+    auth(USER_ROLES.DISPATCHER, USER_ROLES.SUPER_ADMIN),
+    checkDispatcherRoute("/bookings"),
+    validateRequest(BookingValidations.bulkAssignZodSchema),
+    BookingController.bulkAssignDrivers,
+  );
 // calculate total trip price
 router
   .route("/calculate-price")

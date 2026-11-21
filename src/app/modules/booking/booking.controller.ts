@@ -114,6 +114,19 @@ const updateBooking = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const bulkAssignDrivers = catchAsync(async (req: Request, res: Response) => {
+  const result = await BookingServices.bulkAssignDriversInDB(
+    req.user,
+    req.body ?? {},
+  );
+  sendResponse(res, {
+    statusCode: StatusCodes.OK,
+    success: true,
+    message: `${result.assigned} booking(s) assigned to ${result.totalDrivers} active driver(s)`,
+    data: result,
+  });
+});
+
 const getBookingById = catchAsync(async (req: Request, res: Response) => {
   const booking = await BookingServices.getBookingByIdFromDB(
     req.params.id,
@@ -204,6 +217,7 @@ export const BookingController = {
   getTripHistory,
   getTripHistoryInExcel,
   updateBooking,
+  bulkAssignDrivers,
   getBookingById,
   getScheduledBookings,
   getSingleRiderBookingHistory,

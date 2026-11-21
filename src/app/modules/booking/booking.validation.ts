@@ -128,7 +128,19 @@ const updateBookingZodSchema = z.object({
   }),
 });
 
+const bulkAssignZodSchema = z.object({
+  body: z
+    .object({
+      bookingIds: z.array(z.string()).optional(),
+      driverIds: z.array(z.string()).optional(),
+      countyId: z.string().optional(),
+    })
+    .optional()
+    .default({}),
+});
+
 export const BookingValidations = {
+  bulkAssignZodSchema,
   createBookingZodSchema,
   updateBookingZodSchema,
 };

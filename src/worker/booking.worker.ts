@@ -2,7 +2,11 @@ import { Job, UnrecoverableError, Worker } from "bullmq";
 import { Types } from "mongoose";
 import { connectionBullMQ } from "../config/bullMQ.config";
 import { Booking } from "../app/modules/booking/booking.model";
-import { CREATE_RECURRING_BOOKINGS_JOB } from "../queue/booking.queue";
+import {
+  BULK_ASSIGN_DRIVERS_JOB,
+  CREATE_RECURRING_BOOKINGS_JOB,
+} from "../queue/booking.queue";
+import { bulkAssignDrivers } from "../app/modules/booking/booking.bulkAssign";
 
 const CHUNK_SIZE = 100;
 
@@ -92,6 +96,10 @@ const createRecurringBookings = async (job: Job) => {
 const bookingWorker = new Worker(
   "booking",
   async (job) => {
+    if (job.name === BULK_ASSIGN_DRIVERS_JOB) {
+      const { actor, payload } = job.data;
+      return bulkAssignDrivers(actor, payload ?? {});
+    }
     if (job.name !== CREATE_RECURRING_BOOKINGS_JOB) {
       failOnce("Unknown booking job.");
     }
