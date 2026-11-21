@@ -6,7 +6,19 @@ on:
       - main
 
 jobs:
+  # Never deploy code that fails the malware guard: the deploy runs
+  # `npm ci && npm run build` as root on the server.
+  malware-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/security/scan-malware.cjs
+
   deploy:
+    needs: malware-scan
     runs-on: ubuntu-latest
 
     steps:
@@ -24,6 +36,7 @@ jobs:
             cd /var/www/loggis/backend
 
             git pull origin main
+            node scripts/security/scan-malware.cjs || exit 1
             npm ci
             npm run build
 

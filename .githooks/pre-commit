@@ -1,0 +1,4 @@
+#!/bin/sh
+# Malware guard: scan staged files before every commit.
+# Enabled with: git config core.hooksPath .githooks
+exec node scripts/security/scan-malware.cjs --staged
