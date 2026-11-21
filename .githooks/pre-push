@@ -1,15 +1,11 @@
 #!/bin/sh
-# Malware guard: scan every commit being pushed (catches a commit that was
-# rewritten after pre-commit ran, which is what the injected malware did).
+# Malware guard: scan every NEW commit being pushed (catches a commit that
+# was rewritten after pre-commit ran, which is what the injected malware did).
+# Commits already on the remote are skipped: this push does not introduce them.
 zero=0000000000000000000000000000000000000000
 while read local_ref local_sha remote_ref remote_sha; do
   [ "$local_sha" = "$zero" ] && continue   # branch delete
-  if [ "$remote_sha" = "$zero" ]; then
-    commits=$(git rev-list "$local_sha" --not --remotes)
-  else
-    commits=$(git rev-list "$remote_sha..$local_sha")
-  fi
-  for c in $commits; do
+  for c in $(git rev-list "$local_sha" --not --remotes); do
     node scripts/security/scan-malware.cjs --ref "$c" || {
       echo "pre-push: commit $c failed the malware guard — push blocked." >&2
       exit 1
