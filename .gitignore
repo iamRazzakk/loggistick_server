@@ -21,6 +21,5 @@ config.bat
 private*
 private.pub
 PROJECT_RULES.md
-.env
 # Local security tracker (do not push)
 SECURITY_FIXES.md
