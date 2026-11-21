@@ -1,0 +1,3 @@
+# Hooks and the scanner must keep LF endings or `sh` cannot run them.
+.githooks/* text eol=lf
+scripts/security/* text eol=lf

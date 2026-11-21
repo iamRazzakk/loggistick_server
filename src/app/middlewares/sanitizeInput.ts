@@ -28,23 +28,67 @@ const SKIP_KEYS = new Set([
 
 // Formatting tags only; no attributes except safe links and class.
 const FORMATTING_TAGS = [
-  "p", "br", "hr", "div", "span", "b", "strong", "i", "em", "u", "s", "del",
-  "ins", "sub", "sup", "small", "mark", "blockquote", "code", "pre",
-  "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li",
-  "table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption",
+  "p",
+  "br",
+  "hr",
+  "div",
+  "span",
+  "b",
+  "strong",
+  "i",
+  "em",
+  "u",
+  "s",
+  "del",
+  "ins",
+  "sub",
+  "sup",
+  "small",
+  "mark",
+  "blockquote",
+  "code",
+  "pre",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "ul",
+  "ol",
+  "li",
+  "table",
+  "thead",
+  "tbody",
+  "tfoot",
+  "tr",
+  "th",
+  "td",
+  "caption",
 ];
 const defaults = getDefaultWhiteList();
-const whiteList: Record<string, string[]> = { a: ["href", "title", "target", "rel"] };
+const whiteList: Record<string, string[]> = {
+  a: ["href", "title", "target", "rel"],
+};
 for (const tag of FORMATTING_TAGS) {
-  if (tag in defaults || ["div", "span"].includes(tag)) whiteList[tag] = ["class"];
+  if (tag in defaults || ["div", "span"].includes(tag))
+    whiteList[tag] = ["class"];
 }
 
 const filter = new FilterXSS({
   whiteList,
   stripIgnoreTag: true, // unknown tags are removed (not shown as text)
   stripIgnoreTagBody: [
-    "script", "style", "iframe", "object", "embed", "noscript",
-    "textarea", "template", "svg", "math",
+    "script",
+    "style",
+    "iframe",
+    "object",
+    "embed",
+    "noscript",
+    "textarea",
+    "template",
+    "svg",
+    "math",
   ], // removed together with their content
   allowCommentTag: false,
   css: false,
@@ -89,7 +133,7 @@ export const stripDangerousHtml = <T>(value: T, depth = 0): T => {
   }
   return value;
 };
-// 
+//
 
 const sanitizeInput = (req: Request, _res: Response, next: NextFunction) => {
   if (req.body && typeof req.body === "object" && !Buffer.isBuffer(req.body)) {

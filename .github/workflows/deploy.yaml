@@ -35,6 +35,7 @@ jobs:
 
             cd /var/www/loggis/backend
 
+            git config core.hooksPath .githooks
             git pull origin main
             node scripts/security/scan-malware.cjs || exit 1
             npm ci

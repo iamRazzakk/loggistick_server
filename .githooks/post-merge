@@ -1,0 +1,10 @@
+#!/bin/sh
+# Malware guard: runs after every `git pull` (local PC and server).
+# If the pulled code is infected, undo the pull so it is never built or run.
+if ! node scripts/security/scan-malware.cjs; then
+  echo "" >&2
+  echo "post-merge: pulled code FAILED the malware guard — undoing the pull." >&2
+  git reset --hard ORIG_HEAD >&2
+  echo "post-merge: back on $(git rev-parse --short HEAD). Do NOT run npm until the remote is cleaned." >&2
+  exit 1
+fi

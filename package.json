@@ -3,8 +3,11 @@
   "version": "1.0.0",
   "main": "app.ts",
   "scripts": {
+    "predev": "node scripts/security/scan-malware.cjs",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "prestart": "node scripts/security/scan-malware.cjs",
     "start": "node dist/server.js",
+    "prebuild": "node scripts/security/scan-malware.cjs",
     "build": "tsc",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -12,7 +15,8 @@
     "create-module": "ts-node ./src/gen/gm.ts",
     "bench": "node bench/src/ask.js",
     "bench:booking": "node bench/src/booking.js",
-    "redis:clear": "docker exec loggistick-redis redis-cli FLUSHDB"
+    "redis:clear": "docker exec loggistick-redis redis-cli FLUSHDB",
+    "prepare": "git config core.hooksPath .githooks || exit 0"
   },
   "author": "Abdur Razzak",
   "license": "ISC",
