@@ -21,6 +21,11 @@ export const DISPATCHER_FRONTEND_ROUTES = [
   "/cms",
   "/support",
   "/push",
+  // Pages in the admin dashboard's permission matrix that were missing here,
+  // so saving them failed validation.
+  "/dashboard/system-logs",
+  "/funding-sources",
+  "/funding-source-setup",
 ] as const;
 
 export type DispatcherFrontendRoute =
